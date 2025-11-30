@@ -1,0 +1,56 @@
+{
+  "name": "mcpize",
+  "version": "1.0.0",
+  "description": "Deploy and monetize MCP servers in the cloud",
+  "type": "module",
+  "bin": {
+    "mcpize": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chalk": "^5.6.0",
+    "commander": "^14.0.0",
+    "dotenv": "^17.2.3",
+    "enquirer": "^2.4.1",
+    "open": "^11.0.0",
+    "ora": "^9.0.0",
+    "tar": "^7.5.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/tar": "^6.1.13",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "deploy",
+    "serverless",
+    "mcpize"
+  ],
+  "license": "MIT",
+  "author": "MCPize",
+  "homepage": "https://mcpize.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mcpize/cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mcpize/cli/issues"
+  }
+}
