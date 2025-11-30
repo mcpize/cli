@@ -24,6 +24,13 @@ export class NetworkError extends Error {
   }
 }
 
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
 /**
  * Retry configuration for network requests
  */
@@ -221,6 +228,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       body = await response.text();
     }
 
+    // Handle auth errors with clear message
+    if (response.status === 401) {
+      throw new AuthError("Session expired or invalid. Run: mcpize login");
+    }
+
     const errorMessage =
       typeof body === "object" && body !== null && "error" in body
         ? (body as { error: string }).error
@@ -267,6 +279,11 @@ async function edgeFunctionRequest<T>(
       body = await response.json();
     } catch {
       body = await response.text();
+    }
+
+    // Handle auth errors with clear message
+    if (response.status === 401) {
+      throw new AuthError("Session expired or invalid. Run: mcpize login");
     }
 
     const errorMessage =
@@ -400,13 +417,15 @@ export async function createServer(
   });
 }
 
-export async function validateToken(): Promise<boolean> {
-  try {
-    await request("/api/hosting/cli/validate");
-    return true;
-  } catch {
-    return false;
-  }
+export interface UserInfo {
+  id: string;
+  email: string;
+}
+
+export async function getCurrentUser(): Promise<UserInfo> {
+  return edgeFunctionRequest<UserInfo>("hosting-deploy", "whoami", {
+    method: "GET",
+  });
 }
 
 export interface PublishResponse {

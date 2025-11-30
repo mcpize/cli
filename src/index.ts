@@ -120,6 +120,7 @@ program
   .description("Display current authenticated user")
   .action(async () => {
     const { getToken } = await import("./lib/config.js");
+    const { getCurrentUser } = await import("./lib/api.js");
     const token = getToken();
 
     if (!token) {
@@ -127,8 +128,16 @@ program
       process.exit(1);
     }
 
-    console.log(chalk.green("Authenticated"));
-    console.log(chalk.dim(`Token: ${token.slice(0, 8)}...${token.slice(-4)}`));
+    try {
+      const user = await getCurrentUser();
+      console.log(chalk.green("Authenticated"));
+      console.log(`Email: ${user.email}`);
+      console.log(chalk.dim(`User ID: ${user.id}`));
+    } catch (error) {
+      console.log(chalk.red("Token is invalid or expired"));
+      console.log(chalk.dim("Run: mcpize login"));
+      process.exit(1);
+    }
   });
 
 program
