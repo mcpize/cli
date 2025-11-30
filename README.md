@@ -133,8 +133,7 @@ mcpize status --refresh
 ## Links
 
 - [Website](https://mcpize.com)
-- [Documentation](https://mcpize.com/docs)
-- [GitHub](https://github.com/mcpize/cli)
+- [Documentation](https://docs.mcpize.com)
 
 ## License
 
