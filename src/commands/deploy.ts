@@ -488,9 +488,13 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
                 } else {
                   discoverSpinner.warn("No API capabilities discovered");
                 }
-              } catch {
+              } catch (discoverError) {
+                const errMsg =
+                  discoverError instanceof Error
+                    ? discoverError.message
+                    : String(discoverError);
                 discoverSpinner.warn(
-                  "Could not discover capabilities (will retry on next deploy)",
+                  `Could not discover capabilities: ${errMsg}`,
                 );
               }
             }
