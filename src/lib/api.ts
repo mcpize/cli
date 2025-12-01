@@ -749,3 +749,35 @@ export async function getServerSetupStatus(
     { method: "GET" },
   );
 }
+
+export interface DiscoverCapabilitiesResult {
+  success: boolean;
+  discovered: {
+    tools: { name: string; description?: string }[];
+    resources: { uri: string; name?: string }[];
+    prompts: { name: string; description?: string }[];
+  };
+  capabilities: {
+    protocolVersion: string;
+    serverInfo: { name: string; version: string };
+    supportsSSE: boolean;
+  };
+  message?: string;
+}
+
+/**
+ * Discover MCP server capabilities (tools, resources, prompts)
+ * Called after successful deploy to populate the API tab
+ */
+export async function discoverCapabilities(
+  serverId: string,
+): Promise<DiscoverCapabilitiesResult> {
+  return edgeFunctionRequest<DiscoverCapabilitiesResult>("mcp-discover", "", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      server_id: serverId,
+      skip_auth: true, // Hosted servers don't need auth for discovery
+    }),
+  });
+}

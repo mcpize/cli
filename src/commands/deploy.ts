@@ -12,6 +12,7 @@ import {
   listServers,
   findServerByRepo,
   createServer,
+  discoverCapabilities,
   type ServerInfo,
 } from "../lib/api.js";
 import { createTarball, formatBytes } from "../lib/tarball.js";
@@ -465,6 +466,33 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
               console.log(
                 chalk.dim("\nTry: curl https://" + slug + ".mcpize.run"),
               );
+            }
+
+            // Discover MCP capabilities (tools, resources, prompts)
+            if (healthResult.httpOk) {
+              const discoverSpinner = ora(
+                "Discovering API capabilities...",
+              ).start();
+              try {
+                const discovered = await discoverCapabilities(serverId);
+                const toolsCount = discovered.discovered?.tools?.length || 0;
+                const resourcesCount =
+                  discovered.discovered?.resources?.length || 0;
+                const promptsCount =
+                  discovered.discovered?.prompts?.length || 0;
+
+                if (toolsCount > 0 || resourcesCount > 0 || promptsCount > 0) {
+                  discoverSpinner.succeed(
+                    `Discovered ${toolsCount} tools, ${resourcesCount} resources, ${promptsCount} prompts`,
+                  );
+                } else {
+                  discoverSpinner.warn("No API capabilities discovered");
+                }
+              } catch {
+                discoverSpinner.warn(
+                  "Could not discover capabilities (will retry on next deploy)",
+                );
+              }
             }
 
             // Run post-deploy wizard (checks if monetization/SEO needed)
