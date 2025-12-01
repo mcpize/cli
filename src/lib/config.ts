@@ -12,7 +12,6 @@ export interface MCPizeConfig {
   token?: string;
   refreshToken?: string;
   expiresAt?: number; // Unix timestamp in seconds
-  apiUrl?: string;
 }
 
 const CONFIG_DIR = join(homedir(), ".mcpize");
@@ -66,12 +65,8 @@ export function clearToken(): void {
   saveConfig(config);
 }
 
-export function getApiUrl(): string {
-  const config = loadConfig();
-  return (
-    config.apiUrl || process.env.MCPIZE_API_URL || "https://api.mcpize.com"
-  );
-}
+// API URL is now handled through Supabase Functions
+// All API calls go through be.mcpize.com/functions/v1
 
 export function getSupabaseUrl(): string {
   return process.env.MCPIZE_SUPABASE_URL || "https://be.mcpize.com";

@@ -1,4 +1,4 @@
-import { getApiUrl, getFunctionsUrl } from "./config.js";
+import { getFunctionsUrl } from "./config.js";
 import { getValidToken } from "./auth.js";
 
 export class APIError extends Error {
@@ -194,57 +194,6 @@ export interface CreateServerRequest {
   description?: string;
   repo_full_name?: string;
   branch?: string;
-}
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const apiUrl = getApiUrl();
-  const token = await getValidToken();
-
-  if (!token) {
-    throw new Error("Not authenticated. Run: mcpize login");
-  }
-
-  const url = `${apiUrl}${path}`;
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
-  } catch (error) {
-    wrapNetworkError(error);
-  }
-
-  if (!response.ok) {
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      body = await response.text();
-    }
-
-    // Handle auth errors with clear message
-    if (response.status === 401) {
-      throw new AuthError("Session expired or invalid. Run: mcpize login");
-    }
-
-    const errorMessage =
-      typeof body === "object" && body !== null && "error" in body
-        ? (body as { error: string }).error
-        : `API request failed: ${response.status} ${response.statusText}`;
-
-    const isRetryable = RETRY_CONFIG.retryableStatusCodes.includes(
-      response.status,
-    );
-    throw new APIError(errorMessage, response.status, body, isRetryable);
-  }
-
-  return response.json() as Promise<T>;
 }
 
 async function edgeFunctionRequest<T>(
@@ -650,6 +599,153 @@ export async function getServerStatus(
   return edgeFunctionRequest<ServerStatusResponse>(
     "hosting-deploy",
     `server-status?server_id=${encodeURIComponent(serverId)}`,
+    { method: "GET" },
+  );
+}
+
+// ============================================
+// AI Generation APIs
+// ============================================
+
+export interface GeneratedPlan {
+  name: string;
+  type: "fixed" | "usage" | "hybrid";
+  description: string;
+  price_monthly: number;
+  price_yearly: number | null;
+  usage_price: number | null;
+  quota_requests: number | null;
+  quota_tokens: number | null;
+  quota_type: "monthly" | "daily" | "unlimited";
+  rate_limit_value: number | null;
+  rate_limit_unit: "second" | "minute" | "hour" | "day" | null;
+  is_recommended: boolean;
+  require_approval: boolean;
+  status: string;
+}
+
+export interface GeneratePlansResponse {
+  plans: GeneratedPlan[];
+}
+
+export async function generatePlans(
+  serverName: string,
+  userInput: string,
+): Promise<GeneratePlansResponse> {
+  return edgeFunctionRequest<GeneratePlansResponse>("generate-plans", "", {
+    method: "POST",
+    body: JSON.stringify({
+      serverName,
+      userInput,
+      isPrivate: false,
+    }),
+  });
+}
+
+// Response from generate-seo edge function (camelCase from OpenAI)
+export interface GenerateSEORawResponse {
+  displayName: string;
+  category: string;
+  description: string;
+  longDescription: string;
+  seoTitle: string;
+  seoDescription: string;
+  tags: string[];
+}
+
+// Normalized SEO interface used by CLI (snake_case)
+export interface GeneratedSEO {
+  display_name: string;
+  category: string;
+  short_description: string;
+  long_description: string;
+  tags: string[];
+}
+
+export async function generateSEO(
+  serverName: string,
+  description: string,
+  tags?: string[],
+): Promise<GeneratedSEO> {
+  const raw = await edgeFunctionRequest<GenerateSEORawResponse>(
+    "generate-seo",
+    "",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        serverName,
+        description,
+        tags,
+      }),
+    },
+  );
+
+  // Normalize camelCase response to snake_case
+  return {
+    display_name: raw.displayName,
+    category: raw.category,
+    short_description: raw.description,
+    long_description: raw.longDescription,
+    tags: raw.tags,
+  };
+}
+
+export async function savePlans(
+  serverId: string,
+  plans: GeneratedPlan[],
+): Promise<{ success: boolean }> {
+  return edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    "update-server/plans",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        server_id: serverId,
+        plans,
+      }),
+    },
+  );
+}
+
+export interface SaveSEORequest {
+  display_name?: string;
+  category?: string;
+  short_description?: string;
+  long_description?: string;
+  tags?: string[];
+}
+
+export async function saveSEO(
+  serverId: string,
+  seo: SaveSEORequest,
+): Promise<{ success: boolean }> {
+  return edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    "update-server",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        server_id: serverId,
+        ...seo,
+      }),
+    },
+  );
+}
+
+export interface ServerSetupStatus {
+  hasPlans: boolean;
+  hasSEO: boolean;
+  planCount: number;
+}
+
+export async function getServerSetupStatus(
+  serverId: string,
+): Promise<ServerSetupStatus> {
+  return edgeFunctionRequest<ServerSetupStatus>(
+    "hosting-deploy",
+    `setup-status?server_id=${encodeURIComponent(serverId)}`,
     { method: "GET" },
   );
 }

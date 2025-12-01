@@ -23,6 +23,13 @@ import {
   loadManifest,
   loadPackageJson,
 } from "../lib/project.js";
+import { runPostDeployWizard } from "../lib/post-deploy-wizard.js";
+import {
+  runPreDeployChecks,
+  runHealthCheck,
+  checkTarballSize,
+  displayHealthCheckResult,
+} from "../lib/validation.js";
 
 export interface DeployOptions {
   wait?: boolean;
@@ -60,6 +67,31 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
   console.log(chalk.bold("\nMCPize Deploy\n"));
   console.log(chalk.dim(`Runtime: ${manifest?.runtime || "unknown"}`));
 
+  // Run pre-deploy checks
+  if (manifest) {
+    console.log();
+    const preChecks = await runPreDeployChecks(cwd, manifest);
+
+    // Show warnings
+    for (const warning of preChecks.warnings) {
+      console.log(chalk.yellow(`  ⚠ ${warning}`));
+    }
+
+    // Show errors and exit if failed
+    if (!preChecks.passed) {
+      console.log();
+      for (const error of preChecks.errors) {
+        console.error(chalk.red(`  ✗ ${error}`));
+      }
+      console.log();
+      console.error(
+        chalk.red("Pre-deploy checks failed. Fix errors and try again."),
+      );
+      process.exit(1);
+    }
+    console.log();
+  }
+
   // Get git info first (needed for auto-create)
   const gitInfo = await getGitInfo(cwd);
 
@@ -67,6 +99,8 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
   let projectConfig = loadProjectConfig(cwd);
   let serverId = "";
   let serverName: string | undefined;
+  let serverSlug: string | undefined;
+  let isNewServer = false;
 
   if (projectConfig?.serverId) {
     // Already linked to a server
@@ -181,6 +215,8 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
           spinner.succeed(`Created server: ${newServer.name}`);
           serverId = newServer.id;
           serverName = newServer.name;
+          serverSlug = newServer.slug;
+          isNewServer = true;
 
           // Save project config
           projectConfig = {
@@ -243,6 +279,8 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
             createSpinner.succeed(`Created server: ${newServer.name}`);
             serverId = newServer.id;
             serverName = newServer.name;
+            serverSlug = newServer.slug;
+            isNewServer = true;
 
             projectConfig = {
               serverId,
@@ -312,17 +350,14 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
     process.exit(1);
   }
 
-  // Check size limit (100MB)
-  const MAX_SIZE = 100 * 1024 * 1024;
-  if (tarballBuffer.length > MAX_SIZE) {
-    console.error(
-      chalk.red(`\nTarball too large: ${formatBytes(tarballBuffer.length)}`),
-    );
-    console.error(chalk.red(`Maximum allowed: ${formatBytes(MAX_SIZE)}`));
-    console.error(
-      chalk.dim("\nTip: Check .mcpizeignore to exclude large files"),
-    );
+  // Check tarball size
+  const sizeCheck = checkTarballSize(tarballBuffer.length);
+  if (sizeCheck.error) {
+    console.error(chalk.red(`\n${sizeCheck.error}`));
     process.exit(1);
+  }
+  if (sizeCheck.warning) {
+    console.log(chalk.yellow(`  ⚠ ${sizeCheck.warning}`));
   }
 
   // Upload tarball
@@ -359,42 +394,87 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
 
     deploySpinner.succeed("Deployment triggered");
 
-    console.log(chalk.bold.green("\n✓ Deployment started!\n"));
-    console.log(chalk.dim(`Deployment ID: ${deployResult.deployment_id}`));
-    console.log(chalk.dim(`Status: ${deployResult.status}`));
-    console.log(chalk.dim(`Dashboard: ${deployResult.dashboard_url}`));
+    console.log(chalk.dim(`\nDeployment ID: ${deployResult.deployment_id}`));
 
     // Wait for deployment by default, unless --no-wait is specified
     const shouldWait = !options.noWait;
 
     if (shouldWait) {
-      console.log(chalk.dim("\nWaiting for deployment to complete...\n"));
+      console.log(
+        chalk.dim("\n☕ Grab a coffee, this usually takes 2-3 minutes...\n"),
+      );
 
       const waitSpinner = ora("Building...").start();
       const deploymentId = deployResult.deployment_id;
       let lastStatus = "";
+      const startTime = Date.now();
+
+      const formatElapsed = () => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = elapsed % 60;
+        return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      };
 
       while (true) {
         await new Promise((resolve) => setTimeout(resolve, 10000)); // Poll every 10s
 
         try {
           const status = await getDeploymentStatus(deploymentId);
+          const elapsed = formatElapsed();
 
           if (status.status !== lastStatus) {
             lastStatus = status.status;
+          }
 
-            if (status.status === "building") {
-              waitSpinner.text = "Building Docker image...";
-            } else if (status.status === "deploying") {
-              waitSpinner.text = "Deploying to Cloud Run...";
-            }
+          if (status.status === "building") {
+            waitSpinner.text = `Building container... (${elapsed})`;
+          } else if (status.status === "deploying") {
+            waitSpinner.text = `Deploying... (${elapsed})`;
           }
 
           if (status.status === "success") {
             waitSpinner.succeed("Deployment complete!");
             console.log(chalk.bold.green(`\n✓ Server is live!\n`));
-            if (status.service_url) {
-              console.log(chalk.cyan(`URL: ${status.service_url}`));
+
+            // Show marketplace and gateway URLs - ensure slug is lowercase
+            const slug = (
+              serverSlug ||
+              manifest?.name ||
+              serverName ||
+              ""
+            ).toLowerCase();
+            console.log(
+              chalk.cyan(`Marketplace: https://mcpize.com/server/${slug}`),
+            );
+            console.log(chalk.cyan(`Gateway:     https://${slug}.mcpize.run`));
+
+            // Run post-deploy health check
+            const healthSpinner = ora("Verifying deployment...").start();
+            const healthResult = await runHealthCheck(slug);
+
+            if (healthResult.httpOk && healthResult.mcpOk) {
+              healthSpinner.succeed("Server verified and responding");
+              displayHealthCheckResult(healthResult);
+            } else if (healthResult.httpOk) {
+              healthSpinner.warn("Server responding, MCP check inconclusive");
+              displayHealthCheckResult(healthResult);
+            } else {
+              healthSpinner.warn("Server may still be starting up");
+              displayHealthCheckResult(healthResult);
+              console.log(
+                chalk.dim("\nTry: curl https://" + slug + ".mcpize.run"),
+              );
+            }
+
+            // Run post-deploy wizard (checks if monetization/SEO needed)
+            if (serverName) {
+              await runPostDeployWizard({
+                serverId,
+                serverName,
+                serverSlug: slug,
+                description: manifest?.description,
+              });
             }
             break;
           } else if (status.status === "failed") {
