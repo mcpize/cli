@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { z } from "zod";
@@ -257,6 +257,272 @@ function formatBytes(bytes: number): string {
 }
 
 // ============================================
+// Port Configuration Check
+// ============================================
+
+export interface PortCheckResult {
+  valid: boolean;
+  warning?: string;
+  details?: string;
+}
+
+/**
+ * Check if server is configured to use PORT environment variable
+ * instead of hardcoded port numbers
+ */
+export function checkPortConfiguration(
+  cwd: string,
+  runtime: McpizeManifest["runtime"],
+): PortCheckResult {
+  const result: PortCheckResult = { valid: true };
+
+  try {
+    let sourceFiles: string[] = [];
+    let portEnvPattern: RegExp;
+    let hardcodedPortPattern: RegExp;
+
+    switch (runtime) {
+      case "typescript": {
+        // Check built JS files if they exist, otherwise check TS source
+        const buildDir = join(cwd, "build");
+        const distDir = join(cwd, "dist");
+        const srcDir = join(cwd, "src");
+
+        if (existsSync(buildDir)) {
+          sourceFiles = findFiles(buildDir, /\.(js|mjs)$/);
+        } else if (existsSync(distDir)) {
+          sourceFiles = findFiles(distDir, /\.(js|mjs)$/);
+        } else if (existsSync(srcDir)) {
+          sourceFiles = findFiles(srcDir, /\.(ts|js)$/);
+        }
+
+        // Pattern for correct PORT usage
+        portEnvPattern =
+          /process\.env\.PORT|process\.env\["PORT"\]|process\.env\['PORT'\]/;
+        // Pattern for hardcoded listen calls without PORT
+        hardcodedPortPattern = /\.listen\s*\(\s*(\d{4})\s*[,)]/g;
+        break;
+      }
+      case "python": {
+        const srcDir = cwd;
+        sourceFiles = findFiles(srcDir, /\.py$/, [
+          "venv",
+          ".venv",
+          "__pycache__",
+        ]);
+
+        // Pattern for correct PORT usage in Python
+        portEnvPattern =
+          /os\.environ\.get\s*\(\s*["']PORT["']|os\.getenv\s*\(\s*["']PORT["']|environ\s*\[\s*["']PORT["']\]/;
+        // Pattern for hardcoded port in Python
+        hardcodedPortPattern =
+          /\.run\s*\([^)]*port\s*=\s*(\d{4})|uvicorn\.run\s*\([^)]*port\s*=\s*(\d{4})/g;
+        break;
+      }
+      default:
+        return result; // Skip for unsupported runtimes
+    }
+
+    // Look for main entry files first
+    const mainFiles = sourceFiles.filter(
+      (f) =>
+        f.includes("index.") ||
+        f.includes("main.") ||
+        f.includes("server.") ||
+        f.includes("app."),
+    );
+    const filesToCheck =
+      mainFiles.length > 0 ? mainFiles : sourceFiles.slice(0, 10);
+
+    for (const file of filesToCheck) {
+      try {
+        const content = readFileSync(file, "utf-8");
+
+        // Check for hardcoded port
+        const matches = [...content.matchAll(hardcodedPortPattern)];
+        if (matches.length > 0) {
+          // Check if PORT env is also used in the file
+          if (!portEnvPattern.test(content)) {
+            const port = matches[0][1] || matches[0][2];
+            result.valid = false;
+            result.warning = `Hardcoded port ${port} detected. Use process.env.PORT for Cloud Run compatibility`;
+            result.details = file.replace(cwd, ".");
+            return result;
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+  } catch {
+    // If check fails, don't block deploy
+  }
+
+  return result;
+}
+
+/**
+ * Find files matching pattern in directory (recursive)
+ */
+function findFiles(
+  dir: string,
+  pattern: RegExp,
+  excludeDirs: string[] = ["node_modules", ".git"],
+): string[] {
+  const files: string[] = [];
+
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!excludeDirs.includes(entry.name)) {
+          files.push(...findFiles(fullPath, pattern, excludeDirs));
+        }
+      } else if (entry.isFile() && pattern.test(entry.name)) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // Directory not readable
+  }
+
+  return files;
+}
+
+// ============================================
+// Environment Variables / Secrets Check
+// ============================================
+
+export interface SecretsCheckResult {
+  valid: boolean;
+  missingSecrets: string[];
+  warning?: string;
+}
+
+// System env vars that are always available and shouldn't be flagged
+const SYSTEM_ENV_VARS = new Set([
+  "PORT",
+  "NODE_ENV",
+  "PATH",
+  "HOME",
+  "USER",
+  "PWD",
+  "SHELL",
+  "LANG",
+  "TERM",
+  "HOSTNAME",
+  "TZ",
+  // Node.js specific
+  "NODE_PATH",
+  "NODE_OPTIONS",
+  // Common CI/CD
+  "CI",
+  "DEBUG",
+]);
+
+/**
+ * Check for environment variables used in code that might need to be configured as secrets
+ */
+export function checkRequiredSecrets(
+  cwd: string,
+  runtime: McpizeManifest["runtime"],
+  configuredSecrets: string[] = [],
+): SecretsCheckResult {
+  const result: SecretsCheckResult = {
+    valid: true,
+    missingSecrets: [],
+  };
+
+  try {
+    let sourceFiles: string[] = [];
+    let envVarPatterns: RegExp[];
+
+    switch (runtime) {
+      case "typescript": {
+        const buildDir = join(cwd, "build");
+        const distDir = join(cwd, "dist");
+        const srcDir = join(cwd, "src");
+
+        if (existsSync(buildDir)) {
+          sourceFiles = findFiles(buildDir, /\.(js|mjs)$/);
+        } else if (existsSync(distDir)) {
+          sourceFiles = findFiles(distDir, /\.(js|mjs)$/);
+        } else if (existsSync(srcDir)) {
+          sourceFiles = findFiles(srcDir, /\.(ts|js)$/);
+        }
+
+        // Patterns for env var access in JS/TS
+        envVarPatterns = [
+          /process\.env\.([A-Z][A-Z0-9_]{2,})/g,
+          /process\.env\["([A-Z][A-Z0-9_]{2,})"\]/g,
+          /process\.env\['([A-Z][A-Z0-9_]{2,})'\]/g,
+        ];
+        break;
+      }
+      case "python": {
+        sourceFiles = findFiles(cwd, /\.py$/, ["venv", ".venv", "__pycache__"]);
+
+        // Patterns for env var access in Python
+        envVarPatterns = [
+          /os\.environ\.get\s*\(\s*["']([A-Z][A-Z0-9_]{2,})["']/g,
+          /os\.getenv\s*\(\s*["']([A-Z][A-Z0-9_]{2,})["']/g,
+          /environ\s*\[\s*["']([A-Z][A-Z0-9_]{2,})["']\s*\]/g,
+        ];
+        break;
+      }
+      default:
+        return result;
+    }
+
+    const foundEnvVars = new Set<string>();
+    const configuredSet = new Set(
+      configuredSecrets.map((s) => s.toUpperCase()),
+    );
+
+    // Scan source files for env var usage
+    for (const file of sourceFiles.slice(0, 20)) {
+      // Limit to prevent slowdown
+      try {
+        const content = readFileSync(file, "utf-8");
+
+        for (const pattern of envVarPatterns) {
+          // Reset regex state
+          pattern.lastIndex = 0;
+          let match;
+          while ((match = pattern.exec(content)) !== null) {
+            const varName = match[1];
+            if (varName && !SYSTEM_ENV_VARS.has(varName)) {
+              foundEnvVars.add(varName);
+            }
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+
+    // Check which env vars are not configured as secrets
+    for (const envVar of foundEnvVars) {
+      if (!configuredSet.has(envVar.toUpperCase())) {
+        result.missingSecrets.push(envVar);
+      }
+    }
+
+    if (result.missingSecrets.length > 0) {
+      result.valid = false;
+      result.warning = `Potentially missing secrets: ${result.missingSecrets.join(", ")}`;
+    }
+  } catch {
+    // If check fails, don't block deploy
+  }
+
+  return result;
+}
+
+// ============================================
 // Post-Deploy Health Check
 // ============================================
 
@@ -348,6 +614,8 @@ export interface PreDeployCheckResult {
   manifestValid: boolean;
   dependenciesOk: boolean;
   buildOk: boolean;
+  portConfigOk: boolean;
+  secretsOk: boolean;
   errors: string[];
   warnings: string[];
 }
@@ -355,12 +623,15 @@ export interface PreDeployCheckResult {
 export async function runPreDeployChecks(
   cwd: string,
   manifest: McpizeManifest,
+  configuredSecrets: string[] = [],
 ): Promise<PreDeployCheckResult> {
   const result: PreDeployCheckResult = {
     passed: true,
     manifestValid: true,
     dependenciesOk: true,
     buildOk: true,
+    portConfigOk: true,
+    secretsOk: true,
     errors: [],
     warnings: [],
   };
@@ -415,6 +686,32 @@ export async function runPreDeployChecks(
     }
   } else {
     buildSpinner.succeed("Build passed");
+  }
+
+  // 4. Check port configuration (warning only, doesn't block deploy)
+  const portResult = checkPortConfiguration(cwd, manifest.runtime);
+  if (!portResult.valid) {
+    result.portConfigOk = false;
+    result.warnings.push(portResult.warning || "Hardcoded port detected");
+    if (portResult.details) {
+      result.warnings.push(`  File: ${portResult.details}`);
+    }
+  }
+
+  // 5. Check for missing secrets (warning only, doesn't block deploy)
+  const secretsResult = checkRequiredSecrets(
+    cwd,
+    manifest.runtime,
+    configuredSecrets,
+  );
+  if (!secretsResult.valid) {
+    result.secretsOk = false;
+    result.warnings.push(secretsResult.warning || "Missing secrets detected");
+    if (secretsResult.missingSecrets.length > 0) {
+      result.warnings.push(
+        `  Configure with: mcpize secrets set <NAME> <VALUE>`,
+      );
+    }
   }
 
   return result;

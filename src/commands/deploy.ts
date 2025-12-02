@@ -13,8 +13,14 @@ import {
   findServerByRepo,
   createServer,
   discoverCapabilities,
+  listLogs,
   type ServerInfo,
 } from "../lib/api.js";
+import {
+  analyzeDeploymentLogs,
+  formatErrorAnalysis,
+  type LogEntry,
+} from "../lib/error-analyzers/index.js";
 import { createTarball, formatBytes } from "../lib/tarball.js";
 import { getGitInfo } from "../lib/git.js";
 import {
@@ -47,6 +53,57 @@ function slugify(text: string): string {
     .slice(0, 50);
 }
 
+/**
+ * Fetches recent error logs and analyzes the deployment failure using the modular error-analyzers
+ */
+async function fetchAndAnalyzeError(
+  serverId: string,
+  runtime: string,
+  errorMessage?: string,
+): Promise<string> {
+  try {
+    // Fetch recent ERROR and WARNING logs
+    const logsResponse = await listLogs(serverId, {
+      severity: "ERROR",
+      limit: 20,
+    });
+
+    const errorLogs = logsResponse.logs || [];
+
+    // Also get warnings for context
+    const warningsResponse = await listLogs(serverId, {
+      severity: "WARNING",
+      limit: 10,
+    });
+    const warningLogs = warningsResponse.logs || [];
+
+    // Combine and sort by timestamp
+    const allLogs: LogEntry[] = [...errorLogs, ...warningLogs]
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
+      .slice(0, 15);
+
+    // Use the modular analyzer
+    const analysis = analyzeDeploymentLogs(allLogs, runtime, errorMessage);
+
+    // Format and return
+    return formatErrorAnalysis(analysis, chalk);
+  } catch {
+    // If we can't fetch logs, return basic error
+    return formatErrorAnalysis(
+      {
+        category: "unknown",
+        summary: errorMessage || "Deployment failed",
+        details: [],
+        suggestions: ["Run: mcpize logs"],
+      },
+      chalk,
+    );
+  }
+}
+
 export async function deployCommand(options: DeployOptions): Promise<void> {
   const cwd = process.cwd();
 
@@ -75,7 +132,7 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
 
     // Show warnings
     for (const warning of preChecks.warnings) {
-      console.log(chalk.yellow(`  ⚠ ${warning}`));
+      console.log(`  ${chalk.yellow("⚠")} ${chalk.yellow(warning)}`);
     }
 
     // Show errors and exit if failed
@@ -511,10 +568,26 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
             break;
           } else if (status.status === "failed") {
             waitSpinner.fail("Deployment failed");
-            if (status.error) {
-              console.error(chalk.red(`\nError: ${status.error}`));
+
+            // Analyze the failure and show helpful information
+            const analysisSpinner = ora("Analyzing error...").start();
+            try {
+              const runtime = manifest?.runtime || "nodejs";
+              const errorOutput = await fetchAndAnalyzeError(
+                serverId,
+                runtime,
+                status.error,
+              );
+              analysisSpinner.stop();
+              console.log(errorOutput);
+            } catch {
+              analysisSpinner.stop();
+              if (status.error) {
+                console.error(chalk.red(`\nError: ${status.error}`));
+              }
+              console.log(chalk.dim("\nFor more details: mcpize logs"));
             }
-            console.log(chalk.dim(`\nCheck logs: mcpize logs --build`));
+
             process.exit(1);
           }
         } catch (error) {

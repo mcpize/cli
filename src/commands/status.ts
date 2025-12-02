@@ -212,9 +212,11 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
   // Status line
   console.log(`Status: ${formatStatus(server.status)}`);
   console.log(`Health: ${formatHealthStatus(server.health_status)}`);
-  if (server.hosting_url) {
-    console.log(`URL: ${chalk.cyan(server.hosting_url)}`);
-  }
+  // Show public URLs instead of internal GCP hosting URL
+  console.log(
+    `Marketplace: ${chalk.cyan(`https://mcpize.com/server/${server.slug}`)}`,
+  );
+  console.log(`Gateway: ${chalk.cyan(`https://${server.slug}.mcpize.run`)}`);
   console.log();
 
   // Stats

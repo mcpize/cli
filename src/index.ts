@@ -9,6 +9,16 @@ config();
 
 import { Command } from "commander";
 import chalk from "chalk";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+// Read version from package.json
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(
+  readFileSync(join(__dirname, "..", "package.json"), "utf-8"),
+);
+const version = pkg.version;
 import { loginCommand } from "./commands/login.js";
 import { logoutCommand } from "./commands/logout.js";
 import { deployCommand } from "./commands/deploy.js";
@@ -23,6 +33,7 @@ import {
 import { logsCommand } from "./commands/logs.js";
 import { statusCommand } from "./commands/status.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { devCommand } from "./commands/dev.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -30,7 +41,7 @@ const program = new Command();
 program
   .name("mcpize")
   .description("MCPize CLI - Deploy MCP servers to the cloud")
-  .version("1.0.0")
+  .version(version)
   .option(
     "--token <token>",
     "API token (overrides MCPIZE_TOKEN env and saved session)",
@@ -258,7 +269,7 @@ program
   )
   .option("--since <duration>", "Show logs since (e.g., 1h, 30m, 24h)")
   .option("-n, --tail <lines>", "Number of lines to show", "50")
-  .option("-f, --follow", "Follow log output (requires Supabase Realtime)")
+  .option("-f, --follow", "Follow log output (polls every 10s)")
   .option("--json", "Output in JSON format")
   .option("--refresh", "Force refresh from API (ignore cache)")
   .action(async (options) => {
@@ -311,6 +322,9 @@ program
       process.exit(1);
     }
   });
+
+// Dev command
+program.addCommand(devCommand);
 
 // Parse arguments
 program.parse();

@@ -98,11 +98,80 @@ export async function logsCommand(options: LogsOptions): Promise<void> {
   const logType = options.type || "runtime";
   const cacheKey = CacheKeys.serverLogs(serverId, logType);
 
+  // Follow mode - poll for new logs
   if (options.follow) {
-    console.log(
-      chalk.yellow("--follow mode requires Supabase Realtime integration."),
-    );
-    console.log(chalk.dim("Showing latest logs instead...\n"));
+    console.log(chalk.bold(`Following logs (${logType})...\n`));
+    console.log(chalk.dim("Polling every 10s (Cloud Logging has ~30s delay)"));
+    console.log(chalk.dim("Press Ctrl+C to stop\n"));
+
+    let seenIds = new Set<string>();
+    let isFirstPoll = true;
+
+    const poll = async () => {
+      try {
+        const response = await listLogs(serverId, {
+          deploymentId: options.deployment,
+          type: logType,
+          severity: options.severity,
+          since: options.since || "5m",
+          limit: 100,
+        });
+
+        if (response.logs && response.logs.length > 0) {
+          // Filter out already seen logs and print new ones
+          const newLogs = response.logs
+            .filter((log) => !seenIds.has(log.insertId || log.timestamp))
+            .reverse(); // oldest first
+
+          if (newLogs.length > 0) {
+            if (isFirstPoll) {
+              console.log(chalk.dim(`─── ${newLogs.length} recent logs ───\n`));
+            }
+
+            for (const log of newLogs) {
+              printLog(log);
+              seenIds.add(log.insertId || log.timestamp);
+            }
+          }
+
+          isFirstPoll = false;
+
+          // Keep seenIds from growing too large
+          if (seenIds.size > 500) {
+            const arr = Array.from(seenIds);
+            seenIds = new Set(arr.slice(-250));
+          }
+        } else if (isFirstPoll) {
+          console.log(chalk.dim("No recent logs. Waiting for new logs..."));
+          isFirstPoll = false;
+        }
+      } catch (error) {
+        if (error instanceof NetworkError) {
+          console.error(
+            chalk.dim(
+              `[${new Date().toLocaleTimeString()}] Network error, retrying...`,
+            ),
+          );
+        }
+      }
+    };
+
+    // Initial fetch
+    await poll();
+
+    // Poll every 10 seconds
+    const interval = setInterval(poll, 10000);
+
+    // Handle Ctrl+C
+    process.on("SIGINT", () => {
+      clearInterval(interval);
+      console.log(chalk.dim("\n\nStopped following logs."));
+      process.exit(0);
+    });
+
+    // Keep process alive
+    await new Promise(() => {}); // Never resolves
+    return;
   }
 
   // Try to get from cache first (unless --refresh)

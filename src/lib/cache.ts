@@ -14,7 +14,7 @@ interface CacheEntry<T> {
  * TTL values for different cache types
  */
 export const CacheTTL = {
-  STATUS: 5 * 60 * 1000, // 5 minutes
+  STATUS: 60 * 1000, // 1 minute
   LOGS: 5 * 60 * 1000, // 5 minutes
   TEMPLATES: 24 * 60 * 60 * 1000, // 24 hours
 } as const;
