@@ -781,3 +781,40 @@ export async function discoverCapabilities(
     }),
   });
 }
+
+// ============================================
+// Rollback API
+// ============================================
+
+export interface RollbackOptions {
+  targetDeploymentId?: string;
+  steps?: number;
+  reason?: string;
+}
+
+export interface RollbackResponse {
+  success: boolean;
+  deployment_id: string;
+  rolled_back_from: string;
+  rolled_back_to: string;
+  service_url?: string;
+}
+
+/**
+ * Rollback to a previous deployment
+ */
+export async function rollbackDeployment(
+  serverId: string,
+  options: RollbackOptions = {},
+): Promise<RollbackResponse> {
+  return edgeFunctionRequest<RollbackResponse>("hosting-deploy", "rollback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      server_id: serverId,
+      target_deployment_id: options.targetDeploymentId,
+      steps: options.steps,
+      reason: options.reason,
+    }),
+  });
+}

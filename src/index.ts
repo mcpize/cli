@@ -34,6 +34,7 @@ import { logsCommand } from "./commands/logs.js";
 import { statusCommand } from "./commands/status.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { devCommand } from "./commands/dev.js";
+import { rollbackCommand } from "./commands/rollback.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -325,6 +326,9 @@ program
 
 // Dev command
 program.addCommand(devCommand);
+
+// Rollback command
+program.addCommand(rollbackCommand);
 
 // Parse arguments
 program.parse();

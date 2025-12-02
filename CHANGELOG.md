@@ -2,6 +2,20 @@
 
 All notable changes to MCPize CLI.
 
+## [1.0.13] - 2025-12-02
+
+### Fixed
+- Remove internal GCP URL from rollback output (security)
+
+## [1.0.12] - 2025-12-02
+
+### Added
+- `mcpize rollback` - Rollback to previous deployment
+  - `--to <deployment_id>` - Rollback to specific deployment
+  - `--steps <n>` - Rollback N deployments back (default: 1)
+  - `--reason <reason>` - Add rollback reason
+  - `-y, --yes` - Skip confirmation prompt
+
 ## [1.0.11] - 2025-12-02
 
 ### Fixed
