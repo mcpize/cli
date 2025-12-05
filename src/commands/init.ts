@@ -272,16 +272,49 @@ export async function initCommand(
     const installSpinner = ora("Installing dependencies...").start();
 
     try {
-      // Detect package manager
-      const hasYarn = fs.existsSync(path.join(targetDir, "yarn.lock"));
-      const hasPnpm = fs.existsSync(path.join(targetDir, "pnpm-lock.yaml"));
-      const pm = hasPnpm ? "pnpm" : hasYarn ? "yarn" : "npm";
+      // Detect project type and package manager
+      const hasPyproject = fs.existsSync(
+        path.join(targetDir, "pyproject.toml"),
+      );
+      const hasComposer = fs.existsSync(path.join(targetDir, "composer.json"));
+      const hasPackageJson = fs.existsSync(
+        path.join(targetDir, "package.json"),
+      );
 
-      execSync(`${pm} install`, { cwd: targetDir, stdio: "pipe" });
-      installSpinner.succeed("Dependencies installed");
-    } catch {
+      if (hasPyproject) {
+        // Python project - use uv
+        execSync("uv sync", { cwd: targetDir, stdio: "pipe" });
+        installSpinner.succeed("Dependencies installed (uv)");
+      } else if (hasComposer) {
+        // PHP project - use composer
+        execSync("composer install", { cwd: targetDir, stdio: "pipe" });
+        installSpinner.succeed("Dependencies installed (composer)");
+      } else if (hasPackageJson) {
+        // Node.js project - detect package manager
+        const hasYarn = fs.existsSync(path.join(targetDir, "yarn.lock"));
+        const hasPnpm = fs.existsSync(path.join(targetDir, "pnpm-lock.yaml"));
+        const pm = hasPnpm ? "pnpm" : hasYarn ? "yarn" : "npm";
+
+        execSync(`${pm} install`, { cwd: targetDir, stdio: "pipe" });
+        installSpinner.succeed(`Dependencies installed (${pm})`);
+      } else {
+        installSpinner.info(
+          "No package.json, pyproject.toml or composer.json found",
+        );
+      }
+    } catch (error) {
       installSpinner.fail("Failed to install dependencies");
-      console.error(chalk.dim("Run 'npm install' manually"));
+      const hasPyproject = fs.existsSync(
+        path.join(targetDir, "pyproject.toml"),
+      );
+      const hasComposer = fs.existsSync(path.join(targetDir, "composer.json"));
+      if (hasPyproject) {
+        console.error(chalk.dim("Run 'uv sync' manually"));
+      } else if (hasComposer) {
+        console.error(chalk.dim("Run 'composer install' manually"));
+      } else {
+        console.error(chalk.dim("Run 'npm install' manually"));
+      }
     }
   }
 
@@ -289,27 +322,50 @@ export async function initCommand(
   console.log(chalk.bold.green(`\n✓ Project created!\n`));
   console.log("Next steps:");
   console.log(chalk.dim(`  cd ${projectName}`));
+
+  // Detect project type for appropriate commands
+  const isPython = fs.existsSync(path.join(targetDir, "pyproject.toml"));
+  const isPHP = fs.existsSync(path.join(targetDir, "composer.json"));
+
   if (options.noInstall) {
-    console.log(chalk.dim("  npm install"));
+    if (isPython) {
+      console.log(chalk.dim("  uv sync"));
+    } else if (isPHP) {
+      console.log(chalk.dim("  composer install"));
+    } else {
+      console.log(chalk.dim("  npm install"));
+    }
   }
 
   // Special instructions for OpenAPI template without --from-url
   const hasFromUrl = options.fromUrl || options.fromFile;
-  if (template === "typescript/openapi" && !hasFromUrl) {
+  const isOpenApiTemplate =
+    template === "typescript/openapi" || template === "python/openapi";
+  if (isOpenApiTemplate && !hasFromUrl) {
     console.log(chalk.dim("  # Generate from URL:"));
     console.log(
-      chalk.dim("  mcpize init . --template openapi --from-url <openapi-url>"),
+      chalk.dim(
+        `  mcpize init . --template ${template} --from-url <openapi-url>`,
+      ),
     );
     console.log(chalk.dim("  # Or from local file:"));
     console.log(
       chalk.dim(
-        "  mcpize init . --template openapi --from-file ./openapi.yaml",
+        `  mcpize init . --template ${template} --from-file ./openapi.yaml`,
       ),
     );
     console.log();
   }
 
-  console.log(chalk.dim("  npm run dev        # Start local development"));
+  if (isPython) {
+    console.log(
+      chalk.dim("  uv run python -m server.main  # Start local development"),
+    );
+  } else if (isPHP) {
+    console.log(chalk.dim("  php server.php     # Start local development"));
+  } else {
+    console.log(chalk.dim("  npm run dev        # Start local development"));
+  }
   console.log(chalk.dim("  mcpize deploy      # Deploy to MCPize"));
   console.log();
 }

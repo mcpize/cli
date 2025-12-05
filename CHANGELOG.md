@@ -2,6 +2,21 @@
 
 All notable changes to MCPize CLI.
 
+## [1.0.14] - 2025-12-05
+
+### Added
+- Multi-runtime support for `mcpize init`:
+  - Python projects: auto-detect `pyproject.toml`, use `uv sync`
+  - PHP projects: auto-detect `composer.json`, use `composer install`
+  - Runtime-specific "Next steps" instructions
+- New templates:
+  - `python/openapi` - Generate MCP server from OpenAPI spec using FastMCP
+  - `php/default` - PHP MCP server using official mcp/sdk
+
+### Changed
+- Dependency installation now detects project type automatically
+- "Next steps" output shows correct commands for each runtime
+
 ## [1.0.13] - 2025-12-02
 
 ### Fixed
