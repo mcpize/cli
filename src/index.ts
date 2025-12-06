@@ -35,6 +35,7 @@ import { statusCommand } from "./commands/status.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { devCommand } from "./commands/dev.js";
 import { rollbackCommand } from "./commands/rollback.js";
+import { deleteCommand } from "./commands/delete.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -329,6 +330,23 @@ program.addCommand(devCommand);
 
 // Rollback command
 program.addCommand(rollbackCommand);
+
+// Delete command
+program
+  .command("delete")
+  .description("Delete an MCP server permanently")
+  .option("--server <id>", "Server ID to delete")
+  .option("-f, --force", "Skip confirmation prompt (requires --server)")
+  .action(async (options) => {
+    try {
+      await deleteCommand(options);
+    } catch (error) {
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      process.exit(1);
+    }
+  });
 
 // Parse arguments
 program.parse();

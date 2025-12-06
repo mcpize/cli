@@ -818,3 +818,29 @@ export async function rollbackDeployment(
     }),
   });
 }
+
+// ============================================
+// Delete Server API
+// ============================================
+
+export interface DeleteServerResponse {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Delete an MCP server permanently
+ */
+export async function deleteServer(
+  serverId: string,
+): Promise<DeleteServerResponse> {
+  return edgeFunctionRequest<DeleteServerResponse>(
+    "hosting-deploy",
+    "servers",
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server_id: serverId }),
+    },
+  );
+}

@@ -54,6 +54,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const anonKey = getSupabaseAnonKey();
 
   try {
+    // Supabase Auth API uses JSON body with grant_type in query param
     const response = await fetch(
       `${supabaseUrl}/auth/v1/token?grant_type=refresh_token`,
       {

@@ -2,6 +2,16 @@
 
 All notable changes to MCPize CLI.
 
+## [1.0.15] - 2025-12-06
+
+### Added
+- `mcpize delete` - Delete an MCP server permanently
+  - Interactive server selection or `--server <id>`
+  - Safety confirmation: type server slug to confirm
+  - `--force` flag for CI/automation (requires `--server`)
+  - Validates no active subscriptions before deletion
+  - Cleans up storage (logos) before deletion
+
 ## [1.0.14] - 2025-12-05
 
 ### Added
