@@ -20,6 +20,11 @@ mcpize init my-server
 # Deploy to the cloud
 cd my-server
 mcpize deploy
+
+# Or analyze an existing project
+cd existing-mcp-server
+mcpize analyze
+mcpize deploy
 ```
 
 ## Commands
@@ -29,6 +34,7 @@ mcpize deploy
 | `mcpize login` | Authenticate with MCPize |
 | `mcpize logout` | Log out from MCPize |
 | `mcpize init [name]` | Create a new MCP server project |
+| `mcpize analyze` | Generate mcpize.yaml from existing project |
 | `mcpize link` | Link current directory to an existing server |
 | `mcpize deploy` | Deploy to MCPize Cloud |
 | `mcpize status` | Show server status and deployments |
@@ -53,6 +59,30 @@ mcpize init my-api --template openapi --from-url https://api.example.com/openapi
 # Python
 mcpize init my-server --template python
 ```
+
+## Analyze
+
+Generate `mcpize.yaml` from an existing MCP server project:
+
+```bash
+# Analyze current directory
+mcpize analyze
+
+# Preview without saving
+mcpize analyze --dry-run
+
+# Overwrite existing mcpize.yaml
+mcpize analyze --force
+
+# Skip confirmation prompt
+mcpize analyze --yes
+```
+
+The analyze command:
+- Detects runtime (TypeScript, Python, Container)
+- Extracts start command from package.json/Dockerfile
+- Identifies required credentials from code
+- Generates a ready-to-deploy manifest
 
 ## Secrets Management
 
