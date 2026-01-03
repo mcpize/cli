@@ -27,11 +27,24 @@ mcpize analyze
 mcpize deploy
 ```
 
+## Authentication
+
+```bash
+# Browser login (recommended) - opens mcpize.com
+mcpize login
+
+# Email/password login
+mcpize login --email
+```
+
+Browser login opens mcpize.com, you sign in with Google/GitHub/email, and the CLI receives your session automatically.
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `mcpize login` | Authenticate with MCPize |
+| `mcpize login` | Authenticate via browser (recommended) |
+| `mcpize login --email` | Authenticate with email/password |
 | `mcpize logout` | Log out from MCPize |
 | `mcpize init [name]` | Create a new MCP server project |
 | `mcpize analyze` | Generate mcpize.yaml from existing project |

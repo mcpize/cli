@@ -102,9 +102,10 @@ program
 program
   .command("login")
   .description("Authenticate with MCPize via browser")
-  .action(async () => {
+  .option("--email", "Use email/password instead of browser")
+  .action(async (options) => {
     try {
-      await loginCommand();
+      await loginCommand(options);
     } catch (error) {
       console.error(
         chalk.red(error instanceof Error ? error.message : String(error)),
