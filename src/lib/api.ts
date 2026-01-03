@@ -315,6 +315,7 @@ export async function triggerDeploy(
       git_author: options.gitAuthor,
       git_message: options.gitMessage,
       notes: options.notes,
+      trigger_source: "cli",
     }),
   });
 }
@@ -843,4 +844,46 @@ export async function deleteServer(
       body: JSON.stringify({ server_id: serverId }),
     },
   );
+}
+
+// ============================================
+// Analyze Project API
+// ============================================
+
+/**
+ * Analyze a project tarball and generate mcpize.yaml
+ * No authentication required - just project analysis
+ *
+ * @param tarball - Gzipped tarball of the project
+ * @param projectName - Optional project name for the generated manifest
+ * @returns mcpize.yaml content as string
+ */
+export async function analyzeProject(
+  tarball: Buffer,
+  projectName?: string,
+): Promise<string> {
+  const baseUrl = getFunctionsUrl();
+  const queryParams = projectName ? `?name=${encodeURIComponent(projectName)}` : "";
+  const url = `${baseUrl}/analyze-repository/tarball${queryParams}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/gzip",
+    },
+    body: tarball,
+  });
+
+  if (!response.ok) {
+    let errorMessage: string;
+    try {
+      const body = (await response.json()) as { error?: string };
+      errorMessage = body.error || `Analysis failed: ${response.status}`;
+    } catch {
+      errorMessage = `Analysis failed: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.text();
 }

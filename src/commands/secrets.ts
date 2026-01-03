@@ -254,3 +254,124 @@ export async function secretsExportCommand(
     process.exit(1);
   }
 }
+
+export interface SecretsImportOptions extends SecretsOptions {
+  dryRun?: boolean;
+}
+
+/**
+ * Parse .env file content into key-value pairs
+ */
+function parseEnvFile(content: string): Array<{ name: string; value: string }> {
+  const secrets: Array<{ name: string; value: string }> = [];
+  const lines = content.split("\n");
+
+  for (const line of lines) {
+    // Skip empty lines and comments
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    // Match KEY=value or KEY="value" or KEY='value'
+    const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (!match) {
+      continue;
+    }
+
+    const [, name, rawValue] = match;
+    let value = rawValue;
+
+    // Handle quoted values
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    // Unescape common escape sequences
+    value = value
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+
+    secrets.push({ name, value });
+  }
+
+  return secrets;
+}
+
+export async function secretsImportCommand(
+  filePath: string,
+  options: SecretsImportOptions,
+): Promise<void> {
+  requireAuth();
+  const serverId = getServerId(options);
+  const environment = options.environment || "production";
+
+  // Read and parse .env file
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, "utf-8");
+  } catch {
+    console.error(chalk.red(`Failed to read file: ${filePath}`));
+    process.exit(1);
+  }
+
+  const secrets = parseEnvFile(content);
+
+  if (secrets.length === 0) {
+    console.log(chalk.yellow("No valid secrets found in file."));
+    console.log(
+      chalk.dim("Expected format: KEY=value (uppercase letters and underscores)"),
+    );
+    return;
+  }
+
+  console.log(chalk.bold(`\nFound ${secrets.length} secrets to import:\n`));
+  for (const secret of secrets) {
+    const preview = secret.value.length > 20
+      ? secret.value.substring(0, 20) + "..."
+      : secret.value;
+    console.log(`  ${chalk.cyan(secret.name)} = ${chalk.dim(`"${preview}"`)}`);
+  }
+  console.log();
+
+  if (options.dryRun) {
+    console.log(chalk.yellow("Dry run - no secrets were imported."));
+    return;
+  }
+
+  const spinner = ora(`Importing ${secrets.length} secrets...`).start();
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const secret of secrets) {
+    try {
+      await setSecret(serverId, secret.name, secret.value, { environment });
+      successCount++;
+      spinner.text = `Importing secrets... (${successCount}/${secrets.length})`;
+    } catch (error) {
+      failCount++;
+      console.error(
+        chalk.red(
+          `\nFailed to set ${secret.name}: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    }
+  }
+
+  if (failCount === 0) {
+    spinner.succeed(
+      `Imported ${successCount} secrets to ${environment}`,
+    );
+  } else {
+    spinner.warn(
+      `Imported ${successCount} secrets, ${failCount} failed`,
+    );
+  }
+}

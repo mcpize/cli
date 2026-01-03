@@ -29,6 +29,7 @@ import {
   secretsSetCommand,
   secretsDeleteCommand,
   secretsExportCommand,
+  secretsImportCommand,
 } from "./commands/secrets.js";
 import { logsCommand } from "./commands/logs.js";
 import { statusCommand } from "./commands/status.js";
@@ -36,6 +37,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { devCommand } from "./commands/dev.js";
 import { rollbackCommand } from "./commands/rollback.js";
 import { deleteCommand } from "./commands/delete.js";
+import { analyzeCommand } from "./commands/analyze.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -72,6 +74,23 @@ program
   .action(async (name, options) => {
     try {
       await initCommand(name, options);
+    } catch (error) {
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      process.exit(1);
+    }
+  });
+
+program
+  .command("analyze")
+  .description("Analyze current project and generate mcpize.yaml")
+  .option("--force", "Overwrite existing mcpize.yaml")
+  .option("--dry-run", "Preview without saving")
+  .option("-y, --yes", "Skip confirmation prompt")
+  .action(async (options) => {
+    try {
+      await analyzeCommand(options);
     } catch (error) {
       console.error(
         chalk.red(error instanceof Error ? error.message : String(error)),
@@ -250,6 +269,27 @@ secrets
   .action(async (options) => {
     try {
       await secretsExportCommand(options);
+    } catch (error) {
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      process.exit(1);
+    }
+  });
+
+secrets
+  .command("import <file>")
+  .description("Import secrets from a .env file")
+  .option(
+    "-e, --environment <env>",
+    "Environment (production, staging, preview)",
+    "production",
+  )
+  .option("--server <id>", "Server ID (uses linked project if not specified)")
+  .option("--dry-run", "Preview secrets without importing")
+  .action(async (file, options) => {
+    try {
+      await secretsImportCommand(file, options);
     } catch (error) {
       console.error(
         chalk.red(error instanceof Error ? error.message : String(error)),
