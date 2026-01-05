@@ -28,6 +28,7 @@ interface DevOptions {
   tunnel: boolean;
   provider?: TunnelProviderType;
   playground?: boolean;
+  entry?: string;
 }
 
 /**
@@ -73,9 +74,15 @@ function detectRuntime(
 function getDevCommand(
   cwd: string,
   runtime: string,
+  customEntry?: string,
 ): { cmd: string; args: string[] } {
   // Check package.json for custom dev script
   if (runtime === "typescript") {
+    // Custom entry takes priority over package.json scripts
+    if (customEntry) {
+      return { cmd: "npx", args: ["tsx", "watch", customEntry] };
+    }
+
     const pkgPath = join(cwd, "package.json");
     if (existsSync(pkgPath)) {
       try {
@@ -92,6 +99,31 @@ function getDevCommand(
   }
 
   if (runtime === "python") {
+    // Custom entry for Python
+    if (customEntry) {
+      // Convert file path to module notation for uvicorn if it looks like a module
+      if (customEntry.endsWith(":app") || customEntry.includes(":")) {
+        return {
+          cmd: "uvicorn",
+          args: [customEntry, "--reload", "--host", "0.0.0.0"],
+        };
+      }
+      // Direct python execution with watchdog
+      return {
+        cmd: "python",
+        args: [
+          "-m",
+          "watchdog.watchmedo",
+          "auto-restart",
+          "--patterns=*.py",
+          "--recursive",
+          "--",
+          "python",
+          customEntry,
+        ],
+      };
+    }
+
     // Check for uvicorn (FastAPI/FastMCP)
     const reqPath = join(cwd, "requirements.txt");
     if (existsSync(reqPath)) {
@@ -120,7 +152,9 @@ function getDevCommand(
   }
 
   if (runtime === "php") {
-    return { cmd: "php", args: ["-S", "0.0.0.0:8080", "-t", "public"] };
+    // Custom entry for PHP (document root)
+    const docRoot = customEntry || "public";
+    return { cmd: "php", args: ["-S", "0.0.0.0:8080", "-t", docRoot] };
   }
 
   return { cmd: "echo", args: ["Unknown runtime"] };
@@ -212,6 +246,7 @@ function getPlaygroundUrl(tunnelUrl: string): string {
 
 export const devCommand = new Command("dev")
   .description("Run local development server with hot reload")
+  .argument("[entry]", "Entry file (e.g., src/server.ts, app.main:app)")
   .option("-p, --port <port>", "Port to run on", "3000")
   .option("--no-build", "Skip initial build step")
   .option("-t, --tunnel", "Expose server via public tunnel URL")
@@ -220,7 +255,7 @@ export const devCommand = new Command("dev")
     "Tunnel provider: localtunnel, ngrok, cloudflared",
   )
   .option("--playground", "Open MCPize Playground instead of just showing URL")
-  .action(async (options: DevOptions) => {
+  .action(async (entry: string | undefined, options: DevOptions) => {
     const cwd = process.cwd();
     const port = parseInt(options.port, 10);
 
@@ -278,8 +313,11 @@ export const devCommand = new Command("dev")
       }
     }
 
-    // 5. Get dev command
-    const { cmd, args } = getDevCommand(cwd, runtime);
+    // 5. Get dev command (with custom entry if provided)
+    const { cmd, args } = getDevCommand(cwd, runtime, entry);
+    if (entry) {
+      console.log(`Entry: ${chalk.cyan(entry)}`);
+    }
 
     // 6. Prepare environment
     const env: Record<string, string> = {
