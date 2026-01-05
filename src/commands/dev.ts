@@ -4,6 +4,11 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import {
+  createTunnel,
+  type TunnelConnection,
+  type TunnelProviderType,
+} from "../tunnel/index.js";
 
 interface McpizeManifest {
   runtime?: string;
@@ -21,6 +26,8 @@ interface DevOptions {
   port: string;
   inspector: boolean;
   build: boolean;
+  tunnel: boolean;
+  provider?: TunnelProviderType;
 }
 
 /**
@@ -199,6 +206,11 @@ export const devCommand = new Command("dev")
   .option("-p, --port <port>", "Port to run on", "3000")
   .option("--no-inspector", "Don't open MCP Inspector")
   .option("--no-build", "Skip initial build step")
+  .option("-t, --tunnel", "Expose server via public tunnel URL")
+  .option(
+    "--provider <provider>",
+    "Tunnel provider: localtunnel, ngrok, cloudflared",
+  )
   .action(async (options: DevOptions) => {
     const cwd = process.cwd();
     const port = parseInt(options.port, 10);
@@ -276,9 +288,31 @@ export const devCommand = new Command("dev")
     console.log(
       `  ${chalk.gray("MCP:")}     ${chalk.cyan(`http://localhost:${port}/mcp`)}`,
     );
+
+    // 8. Setup tunnel if requested
+    let tunnel: TunnelConnection | null = null;
+    if (options.tunnel) {
+      try {
+        tunnel = await createTunnel(port, options.provider as TunnelProviderType);
+        console.log(
+          `  ${chalk.gray("Public:")} ${chalk.green(tunnel.url)}`,
+        );
+        console.log(
+          `  ${chalk.gray("MCP:")}    ${chalk.green(`${tunnel.url}/mcp`)}`,
+        );
+        console.log(
+          chalk.gray("\n  Use the public URL in Claude Desktop config"),
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.log(chalk.red(`\n✖ Failed to create tunnel: ${message}`));
+        console.log(chalk.gray("  Continuing without tunnel...\n"));
+      }
+    }
+
     console.log(chalk.gray(`\n  Health check: MCP ping method`));
 
-    // 8. Open MCP Inspector
+    // 9. Open MCP Inspector
     if (options.inspector) {
       setTimeout(() => openInspector(port), 2000); // Wait for server to start
     }
@@ -295,12 +329,16 @@ export const devCommand = new Command("dev")
     });
 
     // Handle signals
-    const cleanup = () => {
+    const cleanup = async () => {
+      if (tunnel) {
+        console.log(chalk.gray("\nClosing tunnel..."));
+        await tunnel.close();
+      }
       child.kill("SIGTERM");
       process.exit(0);
     };
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
+    process.on("SIGINT", () => void cleanup());
+    process.on("SIGTERM", () => void cleanup());
 
     child.on("close", (code) => {
       if (code !== 0 && code !== null) {
