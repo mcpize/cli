@@ -24,10 +24,10 @@ interface McpizeManifest {
 
 interface DevOptions {
   port: string;
-  inspector: boolean;
   build: boolean;
   tunnel: boolean;
   provider?: TunnelProviderType;
+  playground?: boolean;
 }
 
 /**
@@ -162,36 +162,9 @@ function loadEnvVars(cwd: string): Record<string, string> {
 }
 
 /**
- * Check if MCP Inspector is available
+ * Open playground URL in browser
  */
-async function checkInspector(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const check = spawn(
-      "npx",
-      ["--yes", "@anthropic-ai/mcp-inspector", "--version"],
-      {
-        stdio: "ignore",
-        shell: true,
-      },
-    );
-    check.on("close", (code) => resolve(code === 0));
-    check.on("error", () => resolve(false));
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      check.kill();
-      resolve(false);
-    }, 5000);
-  });
-}
-
-/**
- * Open MCP Inspector in browser
- */
-function openInspector(port: number): void {
-  const url = `https://inspect.mcpize.dev?url=http://localhost:${port}/mcp`;
-  console.log(chalk.cyan(`\n🔍 MCP Inspector: ${url}`));
-
-  // Try to open browser
+function openBrowser(url: string): void {
   const openCmd =
     process.platform === "darwin"
       ? "open"
@@ -201,16 +174,23 @@ function openInspector(port: number): void {
   spawn(openCmd, [url], { stdio: "ignore", shell: true, detached: true });
 }
 
+/**
+ * Get playground URL for tunnel
+ */
+function getPlaygroundUrl(tunnelUrl: string): string {
+  return `https://mcpize.com/playground?url=${encodeURIComponent(tunnelUrl)}`;
+}
+
 export const devCommand = new Command("dev")
   .description("Run local development server with hot reload")
   .option("-p, --port <port>", "Port to run on", "3000")
-  .option("--no-inspector", "Don't open MCP Inspector")
   .option("--no-build", "Skip initial build step")
   .option("-t, --tunnel", "Expose server via public tunnel URL")
   .option(
     "--provider <provider>",
     "Tunnel provider: localtunnel, ngrok, cloudflared",
   )
+  .option("--playground", "Open MCPize Playground instead of just showing URL")
   .action(async (options: DevOptions) => {
     const cwd = process.cwd();
     const port = parseInt(options.port, 10);
@@ -300,9 +280,22 @@ export const devCommand = new Command("dev")
         console.log(
           `  ${chalk.gray("MCP:")}    ${chalk.green(`${tunnel.url}/mcp`)}`,
         );
+
+        // Show playground URL
+        const playgroundUrl = getPlaygroundUrl(tunnel.url);
         console.log(
-          chalk.gray("\n  Use the public URL in Claude Desktop config"),
+          `\n  ${chalk.gray("Playground:")} ${chalk.cyan(playgroundUrl)}`,
         );
+
+        // Open playground if requested
+        if (options.playground) {
+          console.log(chalk.gray("  Opening in browser..."));
+          setTimeout(() => openBrowser(playgroundUrl), 2000);
+        } else {
+          console.log(
+            chalk.gray("\n  Use --playground flag to open in MCPize Playground"),
+          );
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.log(chalk.red(`\n✖ Failed to create tunnel: ${message}`));
@@ -311,11 +304,6 @@ export const devCommand = new Command("dev")
     }
 
     console.log(chalk.gray(`\n  Health check: MCP ping method`));
-
-    // 9. Open MCP Inspector
-    if (options.inspector) {
-      setTimeout(() => openInspector(port), 2000); // Wait for server to start
-    }
 
     console.log(chalk.gray("\n─────────────────────────────────────────\n"));
     console.log(chalk.gray(`$ ${cmd} ${args.join(" ")}\n`));
