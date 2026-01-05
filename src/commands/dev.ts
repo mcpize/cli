@@ -259,6 +259,11 @@ export const devCommand = new Command("dev")
     const cwd = process.cwd();
     const port = parseInt(options.port, 10);
 
+    // --playground implies --tunnel (playground needs public URL)
+    if (options.playground) {
+      options.tunnel = true;
+    }
+
     console.log(chalk.bold("\nMCPize Dev Server\n"));
 
     // 1. Detect runtime
