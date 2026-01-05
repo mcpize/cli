@@ -57,6 +57,30 @@ Browser login opens mcpize.com, you sign in with Google/GitHub/email, and the CL
 | `mcpize secrets delete <name>` | Delete a secret (alias: `rm`) |
 | `mcpize doctor` | Run pre-deploy diagnostics |
 | `mcpize whoami` | Show current authenticated user |
+| `mcpize dev` | Run local dev server with hot reload |
+
+## Local Development
+
+Run your MCP server locally with hot reload:
+
+```bash
+# Start local dev server
+mcpize dev
+
+# With custom entry point
+mcpize dev src/server.ts
+
+# Expose via public tunnel (for testing with Claude/clients)
+mcpize dev --tunnel
+
+# Open MCPize Playground for interactive testing
+mcpize dev --playground
+
+# Choose tunnel provider (localtunnel, ngrok, cloudflared)
+mcpize dev --tunnel --provider ngrok
+```
+
+The `--playground` flag automatically creates a tunnel and opens the [MCPize Playground](https://mcpize.com/playground) where you can test your server's tools interactively.
 
 ## Templates
 
