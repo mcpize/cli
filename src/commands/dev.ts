@@ -175,6 +175,35 @@ function openBrowser(url: string): void {
 }
 
 /**
+ * Copy text to clipboard using native commands
+ */
+function copyToClipboard(text: string): boolean {
+  try {
+    let cmd: string;
+    let args: string[];
+
+    if (process.platform === "darwin") {
+      cmd = "pbcopy";
+      args = [];
+    } else if (process.platform === "win32") {
+      cmd = "clip";
+      args = [];
+    } else {
+      // Linux: try xclip first, xsel as fallback
+      cmd = "xclip";
+      args = ["-selection", "clipboard"];
+    }
+
+    const proc = spawn(cmd, args, { stdio: ["pipe", "ignore", "ignore"], shell: true });
+    proc.stdin?.write(text);
+    proc.stdin?.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get playground URL for tunnel
  */
 function getPlaygroundUrl(tunnelUrl: string): string {
@@ -274,8 +303,13 @@ export const devCommand = new Command("dev")
     if (options.tunnel) {
       try {
         tunnel = await createTunnel(port, options.provider as TunnelProviderType);
+
+        // Copy tunnel URL to clipboard
+        const copied = copyToClipboard(tunnel.url);
+        const clipboardHint = copied ? chalk.gray(" (copied!)") : "";
+
         console.log(
-          `  ${chalk.gray("Public:")} ${chalk.green(tunnel.url)}`,
+          `  ${chalk.gray("Public:")} ${chalk.green(tunnel.url)}${clipboardHint}`,
         );
         console.log(
           `  ${chalk.gray("MCP:")}    ${chalk.green(`${tunnel.url}/mcp`)}`,

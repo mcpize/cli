@@ -20,10 +20,33 @@ const providers: Record<TunnelProviderType, TunnelProvider> = {
 };
 
 /**
+ * Auto-detect the best available tunnel provider
+ * Priority: cloudflared > ngrok > localtunnel
+ */
+async function detectBestProvider(): Promise<{
+  provider: TunnelProvider;
+  type: TunnelProviderType;
+  isDefault: boolean;
+}> {
+  // 1. cloudflared - free and reliable
+  if (await cloudflaredProvider.isAvailable()) {
+    return { provider: cloudflaredProvider, type: "cloudflared", isDefault: false };
+  }
+
+  // 2. ngrok - if token configured
+  if (await ngrokProvider.isAvailable()) {
+    return { provider: ngrokProvider, type: "ngrok", isDefault: false };
+  }
+
+  // 3. localtunnel - always available fallback
+  return { provider: localtunnelProvider, type: "localtunnel", isDefault: true };
+}
+
+/**
  * Create a tunnel to expose local port to the internet
  *
  * @param port - Local port to expose
- * @param providerType - Specific provider to use (optional, defaults to localtunnel)
+ * @param providerType - Specific provider to use (optional, auto-detects if not specified)
  * @returns Tunnel connection with public URL
  */
 export async function createTunnel(
@@ -53,17 +76,22 @@ export async function createTunnel(
     return provider.connect(port);
   }
 
-  // Default: use localtunnel
-  console.log(
-    chalk.yellow("⚠  Using localtunnel (may be unstable occasionally)"),
-  );
-  console.log(
-    chalk.gray(
-      "   For better reliability: NGROK_AUTHTOKEN=xxx mcpize dev --tunnel --provider=ngrok\n",
-    ),
-  );
+  // Auto-detect best available provider
+  const { provider, type, isDefault } = await detectBestProvider();
 
-  return localtunnelProvider.connect(port);
+  if (isDefault) {
+    console.log(
+      chalk.yellow("⚠  Using localtunnel (may be unstable occasionally)"),
+    );
+    console.log(
+      chalk.gray("   💡 Install cloudflared for better reliability:"),
+    );
+    console.log(chalk.gray("      brew install cloudflared\n"));
+  } else {
+    console.log(chalk.green(`✓ Auto-detected ${type} tunnel provider`));
+  }
+
+  return provider.connect(port);
 }
 
 /**
