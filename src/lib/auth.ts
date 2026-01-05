@@ -35,8 +35,11 @@ interface RefreshResponse {
 }
 
 interface RefreshError {
-  error: string;
+  error?: string;
   error_description?: string;
+  msg?: string;
+  message?: string;
+  error_code?: string;
 }
 
 /**
@@ -46,7 +49,9 @@ interface RefreshError {
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
 
-  if (!refreshToken) {
+  // Check for missing or empty refresh token
+  if (!refreshToken || refreshToken.trim() === "") {
+    console.error("No refresh token available");
     return null;
   }
 
@@ -70,10 +75,19 @@ async function refreshAccessToken(): Promise<string | null> {
     );
 
     if (!response.ok) {
-      const error = (await response.json()) as RefreshError;
-      console.error(
-        `Token refresh failed: ${error.error_description || error.error}`,
-      );
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const error = (await response.json()) as RefreshError;
+        errorMessage =
+          error.error_description ||
+          error.msg ||
+          error.message ||
+          error.error ||
+          (error.error_code ? `Error code: ${error.error_code}` : errorMessage);
+      } catch {
+        // Failed to parse JSON, use status code
+      }
+      console.error(`Token refresh failed: ${errorMessage}`);
       return null;
     }
 

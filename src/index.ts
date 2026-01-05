@@ -152,9 +152,11 @@ program
   .command("whoami")
   .description("Display current authenticated user")
   .action(async () => {
-    const { getToken } = await import("./lib/config.js");
+    const { getValidToken } = await import("./lib/auth.js");
     const { getCurrentUser } = await import("./lib/api.js");
-    const token = getToken();
+
+    // Use getValidToken which handles auto-refresh
+    const token = await getValidToken();
 
     if (!token) {
       console.log(chalk.yellow("Not logged in. Run: mcpize login"));
