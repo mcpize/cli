@@ -1,12 +1,17 @@
 import type { TunnelProvider, TunnelConnection } from "../types.js";
 
 /**
- * ngrok provider - reliable, paid tunneling service
+ * ngrok provider - reliable tunneling service (official SDK)
  *
  * Requires NGROK_AUTHTOKEN environment variable.
- * Get token at: https://dashboard.ngrok.com/get-started/your-authtoken
+ * Get free token at: https://dashboard.ngrok.com/get-started/your-authtoken
  *
- * @see https://ngrok.com/docs
+ * Features:
+ * - Pure JS, no binary download
+ * - Stable URLs during session
+ * - Better reliability than localtunnel
+ *
+ * @see https://ngrok.com/docs/getting-started/javascript
  */
 export const ngrokProvider: TunnelProvider = {
   name: "ngrok",
@@ -15,18 +20,27 @@ export const ngrokProvider: TunnelProvider = {
     return !!process.env.NGROK_AUTHTOKEN;
   },
 
-  async connect(_port: number): Promise<TunnelConnection> {
-    // TODO: Implement when needed
-    // const ngrok = await import('@ngrok/ngrok');
-    // const url = await ngrok.connect({
-    //   addr: port,
-    //   authtoken: process.env.NGROK_AUTHTOKEN
-    // });
+  async connect(port: number): Promise<TunnelConnection> {
+    // Dynamic import to avoid bundling if not used
+    const ngrok = await import("@ngrok/ngrok");
 
-    throw new Error(
-      "ngrok provider is not implemented yet.\n" +
-        "For now, use the default localtunnel provider:\n" +
-        "  mcpize dev --tunnel",
-    );
+    // Create tunnel with authtoken from environment
+    const listener = await ngrok.forward({
+      addr: port,
+      authtoken_from_env: true,
+    });
+
+    const url = listener.url();
+
+    if (!url) {
+      throw new Error("Failed to get ngrok tunnel URL");
+    }
+
+    return {
+      url,
+      close: async () => {
+        await ngrok.disconnect(url);
+      },
+    };
   },
 };
