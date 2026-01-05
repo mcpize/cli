@@ -59,7 +59,7 @@ export async function createTunnel(
   );
   console.log(
     chalk.gray(
-      "   For better reliability, consider ngrok: NGROK_AUTHTOKEN=xxx mcpize dev --tunnel --provider=ngrok\n",
+      "   For better reliability: NGROK_AUTHTOKEN=xxx mcpize dev --tunnel --provider=ngrok\n",
     ),
   );
 
