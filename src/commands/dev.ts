@@ -244,6 +244,61 @@ function getPlaygroundUrl(tunnelUrl: string): string {
   return `https://mcpize.com/playground?url=${encodeURIComponent(tunnelUrl)}`;
 }
 
+/**
+ * Wait for server to be healthy by polling the MCP endpoint
+ */
+async function waitForServer(port: number, maxAttempts = 30): Promise<boolean> {
+  const url = `http://localhost:${port}/mcp`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "mcpize-cli", version: "1.0.0" },
+          },
+          id: 1,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        const data = await response.json();
+        // Check if we got a valid MCP response
+        if (data.result || data.jsonrpc === "2.0") {
+          return true;
+        }
+      }
+    } catch {
+      // Server not ready yet, continue polling
+    }
+
+    // Wait 1 second before next attempt
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Show progress dots
+    if (attempt % 5 === 0) {
+      process.stdout.write(".");
+    }
+  }
+
+  return false;
+}
+
 export const devCommand = new Command("dev")
   .description("Run local development server with hot reload")
   .argument("[entry]", "Entry file (e.g., src/server.ts, app.main:app)")
@@ -332,66 +387,19 @@ export const devCommand = new Command("dev")
       NODE_ENV: "development",
     };
 
-    // 7. Print URLs
-    console.log(chalk.bold("\nStarting server...\n"));
-    console.log(
-      `  ${chalk.gray("Local:")}   ${chalk.cyan(`http://localhost:${port}`)}`,
-    );
-    console.log(
-      `  ${chalk.gray("MCP:")}     ${chalk.cyan(`http://localhost:${port}/mcp`)}`,
-    );
-
-    // 8. Setup tunnel if requested
-    let tunnel: TunnelConnection | null = null;
-    if (options.tunnel) {
-      try {
-        tunnel = await createTunnel(port, options.provider as TunnelProviderType);
-
-        // Copy tunnel URL to clipboard
-        const copied = copyToClipboard(tunnel.url);
-        const clipboardHint = copied ? chalk.gray(" (copied!)") : "";
-
-        console.log(
-          `  ${chalk.gray("Public:")} ${chalk.green(tunnel.url)}${clipboardHint}`,
-        );
-        console.log(
-          `  ${chalk.gray("MCP:")}    ${chalk.green(`${tunnel.url}/mcp`)}`,
-        );
-
-        // Show playground URL
-        const playgroundUrl = getPlaygroundUrl(tunnel.url);
-        console.log(
-          `\n  ${chalk.gray("Playground:")} ${chalk.cyan(playgroundUrl)}`,
-        );
-
-        // Open playground if requested
-        if (options.playground) {
-          console.log(chalk.gray("  Opening in browser..."));
-          setTimeout(() => openBrowser(playgroundUrl), 2000);
-        } else {
-          console.log(
-            chalk.gray("\n  Use --playground flag to open in MCPize Playground"),
-          );
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.log(chalk.red(`\n✖ Failed to create tunnel: ${message}`));
-        console.log(chalk.gray("  Continuing without tunnel...\n"));
-      }
-    }
-
-    console.log(chalk.gray(`\n  Health check: MCP ping method`));
-
+    // 7. Print command info
     console.log(chalk.gray("\n─────────────────────────────────────────\n"));
     console.log(chalk.gray(`$ ${cmd} ${args.join(" ")}\n`));
 
-    // 9. Spawn dev process
+    // 8. Spawn dev process FIRST
     const child: ChildProcess = spawn(cmd, args, {
       cwd,
       stdio: "inherit",
       shell: true,
       env,
     });
+
+    let tunnel: TunnelConnection | null = null;
 
     // Handle signals
     const cleanup = async () => {
@@ -416,4 +424,66 @@ export const devCommand = new Command("dev")
       console.log(chalk.red(`\n✖ Failed to start dev server: ${err.message}`));
       process.exit(1);
     });
+
+    // 9. Wait for server to be healthy before setting up tunnel
+    if (options.tunnel) {
+      // Give the process a moment to start
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      process.stdout.write(chalk.gray("\nWaiting for server to be ready"));
+
+      const isHealthy = await waitForServer(port);
+
+      if (!isHealthy) {
+        console.log(chalk.red("\n✖ Server failed to start or /mcp endpoint not responding"));
+        console.log(chalk.gray("  Make sure your server exposes POST /mcp endpoint"));
+        console.log(chalk.gray("  Continuing without tunnel...\n"));
+      } else {
+        console.log(chalk.green(" ✓\n"));
+
+        // 10. Now setup tunnel
+        try {
+          tunnel = await createTunnel(port, options.provider as TunnelProviderType);
+
+          // Copy tunnel URL to clipboard
+          const copied = copyToClipboard(tunnel.url);
+          const clipboardHint = copied ? chalk.gray(" (copied!)") : "";
+
+          console.log(
+            `  ${chalk.gray("Local:")}      ${chalk.cyan(`http://localhost:${port}`)}`,
+          );
+          console.log(
+            `  ${chalk.gray("MCP:")}        ${chalk.cyan(`http://localhost:${port}/mcp`)}`,
+          );
+          console.log(
+            `  ${chalk.gray("Public:")}     ${chalk.green(tunnel.url)}${clipboardHint}`,
+          );
+          console.log(
+            `  ${chalk.gray("Public MCP:")} ${chalk.green(`${tunnel.url}/mcp`)}`,
+          );
+
+          // Show playground URL
+          const playgroundUrl = getPlaygroundUrl(tunnel.url);
+          console.log(
+            `\n  ${chalk.gray("Playground:")} ${chalk.cyan(playgroundUrl)}`,
+          );
+
+          // Open playground if requested
+          if (options.playground) {
+            console.log(chalk.gray("\n  Opening playground in browser..."));
+            openBrowser(playgroundUrl);
+          } else {
+            console.log(
+              chalk.gray("\n  Use --playground flag to open in MCPize Playground"),
+            );
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.log(chalk.red(`\n✖ Failed to create tunnel: ${message}`));
+          console.log(chalk.gray("  Continuing without tunnel...\n"));
+        }
+      }
+
+      console.log(chalk.gray("\n─────────────────────────────────────────\n"));
+    }
   });
