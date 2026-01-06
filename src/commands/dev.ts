@@ -337,7 +337,7 @@ async function waitForServer(port: number, maxAttempts = 30): Promise<boolean> {
       clearTimeout(timeout);
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as { result?: unknown; jsonrpc?: string };
         // Check if we got a valid MCP response
         if (data.result || data.jsonrpc === "2.0") {
           return true;

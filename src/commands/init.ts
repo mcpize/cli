@@ -357,15 +357,7 @@ export async function initCommand(
     console.log();
   }
 
-  if (isPython) {
-    console.log(
-      chalk.dim("  uv run python -m server.main  # Start local development"),
-    );
-  } else if (isPHP) {
-    console.log(chalk.dim("  php server.php     # Start local development"));
-  } else {
-    console.log(chalk.dim("  npm run dev        # Start local development"));
-  }
+  console.log(chalk.dim("  mcpize dev         # Start local development"));
   console.log(chalk.dim("  mcpize deploy      # Deploy to MCPize"));
   console.log();
 }
