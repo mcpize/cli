@@ -247,26 +247,11 @@ function getPlaygroundUrl(tunnelUrl: string): string {
 
 /**
  * Check if a port is available (not in use)
+ * Uses lsof to check all interfaces (not just 127.0.0.1)
  */
-function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer();
-
-    server.once("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE") {
-        resolve(false);
-      } else {
-        // Other errors - assume port is available
-        resolve(true);
-      }
-    });
-
-    server.once("listening", () => {
-      server.close(() => resolve(true));
-    });
-
-    server.listen(port, "127.0.0.1");
-  });
+async function isPortAvailable(port: number): Promise<boolean> {
+  const processInfo = await getPortProcess(port);
+  return processInfo === null;
 }
 
 /**
