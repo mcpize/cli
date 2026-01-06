@@ -305,6 +305,57 @@ async function getPortProcess(port: number): Promise<string | null> {
 }
 
 /**
+ * Wait for tunnel URL to be accessible
+ */
+async function waitForTunnelUrl(tunnelUrl: string, maxAttempts = 10): Promise<boolean> {
+  const mcpUrl = `${tunnelUrl}/mcp`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(mcpUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "mcpize-cli", version: "1.0.0" },
+          },
+          id: 1,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+      // Tunnel not ready yet, continue polling
+    }
+
+    // Wait 1 second before next attempt
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Show progress dots every 2 attempts
+    if (attempt % 2 === 0) {
+      process.stdout.write(".");
+    }
+  }
+
+  return false;
+}
+
+/**
  * Wait for server to be healthy by polling the MCP endpoint
  */
 async function waitForServer(port: number, maxAttempts = 30): Promise<boolean> {
@@ -548,8 +599,19 @@ export const devCommand = new Command("dev")
 
           // Open playground if requested
           if (options.playground) {
-            console.log(chalk.gray("\n  Opening playground in browser..."));
-            openBrowser(playgroundUrl);
+            console.log(chalk.gray("\n  Waiting for tunnel to be ready..."));
+
+            // Wait for tunnel URL to be accessible
+            const tunnelReady = await waitForTunnelUrl(tunnel.url);
+
+            if (tunnelReady) {
+              console.log(chalk.green("  ✓ Tunnel ready"));
+              console.log(chalk.gray("  Opening playground in browser..."));
+              openBrowser(playgroundUrl);
+            } else {
+              console.log(chalk.yellow("  ⚠ Tunnel may take a moment to fully connect"));
+              console.log(chalk.gray(`  Open manually: ${playgroundUrl}`));
+            }
           } else {
             console.log(
               chalk.gray("\n  Use --playground flag to open in MCPize Playground"),
