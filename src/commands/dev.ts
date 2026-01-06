@@ -554,23 +554,40 @@ export const devCommand = new Command("dev")
       process.exit(1);
     });
 
-    // 9. Wait for server to be healthy before setting up tunnel
-    if (options.tunnel) {
-      // Give the process a moment to start
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // 9. Wait for server to be healthy
+    // Give the process a moment to start
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-      process.stdout.write(chalk.gray("\nWaiting for server to be ready"));
+    process.stdout.write(chalk.gray("\nWaiting for server to be ready"));
 
-      const isHealthy = await waitForServer(port);
+    const isHealthy = await waitForServer(port);
 
-      if (!isHealthy) {
-        console.log(chalk.red("\n✖ Server failed to start or /mcp endpoint not responding"));
+    if (!isHealthy) {
+      console.log(chalk.red("\n✖ Server failed to start or /mcp endpoint not responding"));
+
+      // Double-check if port is actually in use now
+      const portStillAvailable = await isPortAvailable(port);
+      if (!portStillAvailable) {
+        console.log(chalk.yellow("  ⚠ Port is now in use by another process"));
+        const processInfo = await getPortProcess(port);
+        if (processInfo) {
+          console.log(chalk.gray(`  Process: ${processInfo.substring(0, 80)}`));
+        }
+        console.log(chalk.gray(`\n  Try using a different port: ${chalk.white(`mcpize dev --port ${port + 1}`)}`));
+      } else {
         console.log(chalk.gray("  Make sure your server exposes POST /mcp endpoint"));
+      }
+
+      if (options.tunnel) {
         console.log(chalk.gray("  Continuing without tunnel...\n"));
       } else {
-        console.log(chalk.green(" ✓\n"));
+        console.log(chalk.gray("\n  Server may still start - check the output above\n"));
+      }
+    } else {
+      console.log(chalk.green(" ✓\n"));
 
-        // 10. Now setup tunnel
+      // 10. Setup tunnel if requested
+      if (options.tunnel) {
         try {
           tunnel = await createTunnel(port, options.provider as TunnelProviderType);
 
@@ -622,8 +639,20 @@ export const devCommand = new Command("dev")
           console.log(chalk.red(`\n✖ Failed to create tunnel: ${message}`));
           console.log(chalk.gray("  Continuing without tunnel...\n"));
         }
-      }
 
-      console.log(chalk.gray("\n─────────────────────────────────────────\n"));
+        console.log(chalk.gray("\n─────────────────────────────────────────\n"));
+      } else {
+        // No tunnel - just show local URLs
+        console.log(
+          `  ${chalk.gray("Local:")}  ${chalk.cyan(`http://localhost:${port}`)}`,
+        );
+        console.log(
+          `  ${chalk.gray("MCP:")}    ${chalk.cyan(`http://localhost:${port}/mcp`)}`,
+        );
+        console.log(
+          chalk.gray("\n  Use --tunnel flag to get a public URL"),
+        );
+        console.log(chalk.gray("\n─────────────────────────────────────────\n"));
+      }
     }
   });
