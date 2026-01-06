@@ -514,18 +514,44 @@ export const devCommand = new Command("dev")
     });
 
     let tunnel: TunnelConnection | null = null;
+    let isCleaningUp = false;
+    let cleanupAttempts = 0;
 
     // Handle signals
-    const cleanup = async () => {
+    const cleanup = () => {
+      cleanupAttempts++;
+
+      // Force exit on second Ctrl+C
+      if (cleanupAttempts > 1) {
+        console.log(chalk.yellow("\n⚡ Force exiting..."));
+        process.exit(1);
+      }
+
+      if (isCleaningUp) return;
+      isCleaningUp = true;
+
       if (tunnel) {
         console.log(chalk.gray("\nClosing tunnel..."));
-        await tunnel.close();
+        tunnel.close().catch(() => {}); // Don't await - non-blocking
       }
-      child.kill("SIGTERM");
-      process.exit(0);
+
+      // Kill entire process group (npm + tsx + all children)
+      if (child.pid) {
+        try {
+          // Negative PID kills the entire process group
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          // Fallback to killing just the child
+          child.kill("SIGKILL");
+        }
+      }
+
+      // Exit after a short delay to allow cleanup
+      setTimeout(() => process.exit(0), 500);
     };
-    process.on("SIGINT", () => void cleanup());
-    process.on("SIGTERM", () => void cleanup());
+
+    process.on("SIGINT", cleanup);
+    process.on("SIGTERM", cleanup);
 
     child.on("close", (code) => {
       if (code !== 0 && code !== null) {
