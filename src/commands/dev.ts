@@ -3,6 +3,7 @@ import chalk from "chalk";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createServer } from "node:net";
 import { parse as parseYaml } from "yaml";
 import {
   createTunnel,
@@ -245,6 +246,65 @@ function getPlaygroundUrl(tunnelUrl: string): string {
 }
 
 /**
+ * Check if a port is available (not in use)
+ */
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+
+    server.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        resolve(false);
+      } else {
+        // Other errors - assume port is available
+        resolve(true);
+      }
+    });
+
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+/**
+ * Get process info using the port (cross-platform)
+ */
+async function getPortProcess(port: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const isWindows = process.platform === "win32";
+    const cmd = isWindows ? "netstat" : "lsof";
+    const args = isWindows
+      ? ["-ano", "|", "findstr", `:${port}`]
+      : ["-i", `:${port}`, "-P", "-n"];
+
+    const proc = spawn(cmd, args, {
+      shell: true,
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+
+    let output = "";
+    proc.stdout?.on("data", (data) => {
+      output += data.toString();
+    });
+
+    proc.on("close", () => {
+      if (output.trim()) {
+        // Extract process name/PID from first line
+        const firstLine = output.trim().split("\n")[0];
+        resolve(firstLine);
+      } else {
+        resolve(null);
+      }
+    });
+
+    proc.on("error", () => resolve(null));
+  });
+}
+
+/**
  * Wait for server to be healthy by polling the MCP endpoint
  */
 async function waitForServer(port: number, maxAttempts = 30): Promise<boolean> {
@@ -347,7 +407,25 @@ export const devCommand = new Command("dev")
       console.log(`Env vars: ${chalk.cyan(envCount)} loaded from .env`);
     }
 
-    // 4. Run initial build for TypeScript
+    // 4. Check if port is available
+    const portAvailable = await isPortAvailable(port);
+    if (!portAvailable) {
+      console.log(chalk.red(`\n✖ Port ${port} is already in use`));
+
+      // Try to show what's using it
+      const processInfo = await getPortProcess(port);
+      if (processInfo) {
+        console.log(chalk.gray(`  Process: ${processInfo.substring(0, 80)}...`));
+      }
+
+      console.log(chalk.gray(`\n  Options:`));
+      console.log(chalk.gray(`  1. Kill the process: ${chalk.white(`lsof -ti:${port} | xargs kill -9`)}`));
+      console.log(chalk.gray(`  2. Use different port: ${chalk.white(`mcpize dev --port ${port + 1}`)}`));
+      process.exit(1);
+    }
+    console.log(`Port: ${chalk.cyan(port)} (available)`);
+
+    // 5. Run initial build for TypeScript (if needed)
     if (options.build && runtime === "typescript") {
       const pkgPath = join(cwd, "package.json");
       if (existsSync(pkgPath)) {
