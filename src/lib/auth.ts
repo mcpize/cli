@@ -44,13 +44,28 @@ interface RefreshError {
 
 /**
  * Refresh the access token using the stored refresh token.
+ *
+ * IMPORTANT: Supabase uses refresh token rotation - each refresh token
+ * can only be used once. This creates a race condition if multiple CLI
+ * processes try to refresh simultaneously:
+ *
+ * 1. Process A reads refresh_token_1, starts refresh
+ * 2. Process B reads refresh_token_1, starts refresh
+ * 3. Process A succeeds, saves refresh_token_2
+ * 4. Process B fails with "Already Used" (token_1 was already used by A)
+ *
+ * We handle this by:
+ * - Detecting "Already Used" and checking if another process refreshed
+ * - Using optimistic concurrency when saving (check if token changed)
+ *
  * Returns the new access token or null if refresh failed.
  */
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
+  // Capture the original refresh token BEFORE making the API call
+  const originalRefreshToken = getRefreshToken();
 
   // Check for missing or empty refresh token
-  if (!refreshToken || refreshToken.trim() === "") {
+  if (!originalRefreshToken || originalRefreshToken.trim() === "") {
     console.error("No refresh token available");
     return null;
   }
@@ -69,13 +84,15 @@ async function refreshAccessToken(): Promise<string | null> {
           apikey: anonKey,
         },
         body: JSON.stringify({
-          refresh_token: refreshToken,
+          refresh_token: originalRefreshToken,
         }),
       },
     );
 
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`;
+      let isAlreadyUsed = false;
+
       try {
         const error = (await response.json()) as RefreshError;
         errorMessage =
@@ -84,14 +101,50 @@ async function refreshAccessToken(): Promise<string | null> {
           error.message ||
           error.error ||
           (error.error_code ? `Error code: ${error.error_code}` : errorMessage);
+
+        // Detect "Already Used" error from Supabase
+        isAlreadyUsed =
+          errorMessage.toLowerCase().includes("already used") ||
+          errorMessage.toLowerCase().includes("refresh_token_reuse");
       } catch {
         // Failed to parse JSON, use status code
       }
+
+      // Handle "Already Used" - another process may have refreshed
+      if (isAlreadyUsed) {
+        const currentRefreshToken = getRefreshToken();
+
+        // If token changed, another process successfully refreshed
+        if (currentRefreshToken && currentRefreshToken !== originalRefreshToken) {
+          // Use the token from the other process
+          const currentAccessToken = getToken();
+          if (currentAccessToken && !isTokenExpired()) {
+            return currentAccessToken;
+          }
+        }
+        // Token didn't change - it's truly invalid
+      }
+
       console.error(`Token refresh failed: ${errorMessage}`);
       return null;
     }
 
     const data = (await response.json()) as RefreshResponse;
+
+    // Optimistic concurrency: Check if another process saved new tokens
+    // while we were waiting for our refresh to complete
+    const currentRefreshToken = getRefreshToken();
+
+    if (currentRefreshToken && currentRefreshToken !== originalRefreshToken) {
+      // Another process refreshed while we were waiting
+      // Their tokens are valid (and ours might cause issues if we overwrite)
+      // Use their access token if it's still valid
+      const currentAccessToken = getToken();
+      if (currentAccessToken && !isTokenExpired()) {
+        return currentAccessToken;
+      }
+      // Their token is already expired, use ours
+    }
 
     // Save the new session
     setSession(data.access_token, data.refresh_token, data.expires_in);
