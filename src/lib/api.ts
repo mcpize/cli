@@ -735,6 +735,23 @@ export async function saveSEO(
   );
 }
 
+export async function markServerAsFree(
+  serverId: string,
+): Promise<{ success: boolean }> {
+  return edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    "update-server",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        server_id: serverId,
+        is_free: true,
+      }),
+    },
+  );
+}
+
 export interface ServerSetupStatus {
   hasPlans: boolean;
   hasSEO: boolean;

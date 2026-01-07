@@ -7,6 +7,7 @@ import {
   savePlans,
   saveSEO,
   getServerSetupStatus,
+  markServerAsFree,
   type GeneratedPlan,
   type GeneratedSEO,
 } from "./api.js";
@@ -98,6 +99,29 @@ async function setupMonetization(
   });
 
   if (!setupMoney) {
+    // Offer to mark server as free instead
+    const { makeFree } = await prompt<{ makeFree: boolean }>({
+      type: "confirm",
+      name: "makeFree",
+      message: "Make this server free for everyone?",
+      initial: true,
+    });
+
+    if (makeFree) {
+      const spinner = ora("Marking server as free...").start();
+      try {
+        await markServerAsFree(serverId);
+        spinner.succeed("Server marked as free!");
+        console.log(chalk.dim("  Free community servers don't require pricing plans\n"));
+        return true;
+      } catch (error) {
+        spinner.fail("Failed to mark server as free");
+        console.error(
+          chalk.red(error instanceof Error ? error.message : String(error)),
+        );
+      }
+    }
+
     console.log(chalk.dim("Skipped monetization setup.\n"));
     return false;
   }
