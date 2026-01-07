@@ -11,7 +11,6 @@ import {
   getSupabaseUrl,
   getSupabaseAnonKey,
 } from "../lib/config.js";
-import { isAuthenticated } from "../lib/auth.js";
 
 const { prompt } = Enquirer;
 
@@ -490,17 +489,48 @@ async function emailPasswordLogin(): Promise<void> {
 }
 
 /**
+ * Validate token by calling the server
+ * Returns true if token is valid, false otherwise
+ */
+async function validateTokenWithServer(token: string): Promise<boolean> {
+  try {
+    const supabaseUrl = getSupabaseUrl();
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/hosting-deploy/whoami`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Main login command
  */
 export async function loginCommand(options: LoginOptions = {}): Promise<void> {
   console.log(chalk.bold("\nMCPize Login\n"));
 
-  // Check if already logged in - skip silently
-  const authenticated = await isAuthenticated();
-  if (authenticated) {
-    console.log(chalk.green("✓ Already logged in.\n"));
-    console.log(chalk.dim("Use mcpize logout first to switch accounts.\n"));
-    return;
+  // Check if already logged in - validate with server, not just local check
+  const { getValidToken } = await import("../lib/auth.js");
+  const token = await getValidToken();
+
+  if (token) {
+    // Validate the token actually works with the server
+    const isValid = await validateTokenWithServer(token);
+    if (isValid) {
+      console.log(chalk.green("✓ Already logged in.\n"));
+      console.log(chalk.dim("Use mcpize logout first to switch accounts.\n"));
+      return;
+    }
+    // Token exists locally but is invalid on server - clear and re-login
+    console.log(chalk.yellow("Session expired. Re-authenticating...\n"));
+    clearSession();
   }
 
   // Use email/password if --email flag is set
