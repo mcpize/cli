@@ -1,6 +1,6 @@
 {
   "name": "mcpize",
-  "version": "1.0.37",
+  "version": "1.0.38",
   "description": "Deploy and monetize MCP servers in the cloud",
   "type": "module",
   "bin": {

@@ -112,17 +112,25 @@ async function refreshAccessToken(): Promise<string | null> {
 
       // Handle "Already Used" - another process may have refreshed
       if (isAlreadyUsed) {
-        const currentRefreshToken = getRefreshToken();
+        // Wait and retry multiple times - another process might be saving new tokens
+        for (let retry = 0; retry < 3; retry++) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * (retry + 1)));
 
-        // If token changed, another process successfully refreshed
-        if (currentRefreshToken && currentRefreshToken !== originalRefreshToken) {
-          // Use the token from the other process
-          const currentAccessToken = getToken();
-          if (currentAccessToken && !isTokenExpired()) {
-            return currentAccessToken;
+          const currentRefreshToken = getRefreshToken();
+
+          // If token changed, another process successfully refreshed
+          if (currentRefreshToken && currentRefreshToken !== originalRefreshToken) {
+            const currentAccessToken = getToken();
+            if (currentAccessToken && !isTokenExpired()) {
+              return currentAccessToken;
+            }
           }
         }
-        // Token didn't change - it's truly invalid
+
+        // Token didn't change after retries - truly invalid
+        console.error(`Token refresh failed: ${errorMessage}`);
+        console.error("Hint: Your session may have been used elsewhere. Run: mcpize login");
+        return null;
       }
 
       console.error(`Token refresh failed: ${errorMessage}`);
@@ -192,8 +200,9 @@ export async function getValidToken(): Promise<string | null> {
   const newToken = await refreshAccessToken();
 
   if (!newToken) {
-    // Refresh failed, clear session
-    clearSession();
+    // Refresh failed - DON'T clear session automatically!
+    // Another process might have saved valid tokens, or user might want to retry.
+    // User can explicitly run "mcpize logout" if they want to clear.
     return null;
   }
 

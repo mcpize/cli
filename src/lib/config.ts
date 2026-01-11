@@ -4,9 +4,12 @@ import {
   readFileSync,
   writeFileSync,
   chmodSync,
+  renameSync,
+  unlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 
 export interface MCPizeConfig {
   token?: string;
@@ -38,14 +41,34 @@ export function loadConfig(): MCPizeConfig {
   }
 }
 
+/**
+ * Save config atomically using write-to-temp-then-rename pattern.
+ * This prevents partial writes and file corruption.
+ */
 export function saveConfig(config: MCPizeConfig): void {
   ensureConfigDir();
 
   const content = JSON.stringify(config, null, 2);
-  writeFileSync(CONFIG_FILE, content, { mode: 0o600 });
+  const tempFile = join(CONFIG_DIR, `config.${randomBytes(8).toString("hex")}.tmp`);
 
-  // Ensure file permissions are correct (user read/write only)
-  chmodSync(CONFIG_FILE, 0o600);
+  try {
+    // Write to temp file first
+    writeFileSync(tempFile, content, { mode: 0o600 });
+    chmodSync(tempFile, 0o600);
+
+    // Atomic rename (on most filesystems)
+    renameSync(tempFile, CONFIG_FILE);
+  } catch (error) {
+    // Clean up temp file if rename failed
+    try {
+      if (existsSync(tempFile)) {
+        unlinkSync(tempFile);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
 }
 
 export function getToken(): string | undefined {
