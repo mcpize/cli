@@ -11,6 +11,11 @@ import {
   type GeneratedPlan,
   type GeneratedSEO,
 } from "./api.js";
+import {
+  getDeveloperSettingsUrl,
+  getServerPageUrl,
+  getServerManageUrl,
+} from "./config.js";
 
 const { prompt } = Enquirer;
 
@@ -74,15 +79,15 @@ export async function runPostDeployWizard(
     console.log(
       chalk.yellow("⚠ Reminder: Connect Stripe to receive payments"),
     );
-    console.log(chalk.dim("  Visit: https://mcpize.com/developer/settings\n"));
+    console.log(chalk.dim(`  Visit: ${getDeveloperSettingsUrl()}\n`));
   }
 
   // Next steps
   console.log(chalk.bold("Next steps:"));
-  console.log(chalk.cyan(`  • View: https://mcpize.com/server/${serverSlug}`));
+  console.log(chalk.cyan(`  • View: ${getServerPageUrl(serverSlug)}`));
   console.log(
     chalk.cyan(
-      `  • Edit: https://mcpize.com/developer/servers/${serverId}/manage`,
+      `  • Edit: ${getServerManageUrl(serverId)}`,
     ),
   );
 }

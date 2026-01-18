@@ -128,8 +128,13 @@ async function refreshAccessToken(): Promise<string | null> {
         }
 
         // Token didn't change after retries - truly invalid
-        console.error(`Token refresh failed: ${errorMessage}`);
-        console.error("Hint: Your session may have been used elsewhere. Run: mcpize login");
+        console.error(`Session expired: ${errorMessage}`);
+        console.error("");
+        console.error("Quick fix: mcpize login");
+        console.error("");
+        console.error("Better solution: Use a CLI token that doesn't expire:");
+        console.error("  1. Run: mcpize token create \"my-machine\"");
+        console.error("  2. Set: export MCPIZE_TOKEN=mcpz_xxx");
         return null;
       }
 

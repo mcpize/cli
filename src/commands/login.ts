@@ -10,12 +10,13 @@ import {
   clearSession,
   getSupabaseUrl,
   getSupabaseAnonKey,
+  getWebAppUrl,
 } from "../lib/config.js";
 
 const { prompt } = Enquirer;
 
-// Web app URL for browser login
-const WEB_APP_URL = process.env.MCPIZE_WEB_URL || "https://mcpize.com";
+// Web app URL for browser login (centralized in config)
+const WEB_APP_URL = getWebAppUrl();
 
 interface AuthResponse {
   access_token: string;

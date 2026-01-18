@@ -8,6 +8,36 @@ import { downloadTemplate, fetchTemplatesList } from "../lib/degit.js";
 
 const { prompt } = Enquirer;
 
+/**
+ * Resolve project name when user runs `mcpize init .`
+ * Priority: existing package.json name → current directory name
+ */
+function resolveProjectName(targetDir: string, providedName: string): string {
+  // If name is "." or empty, we're initializing in current directory
+  const isCurrentDir = providedName === "." || providedName === "";
+
+  if (!isCurrentDir) {
+    return providedName;
+  }
+
+  // Try to read name from existing package.json
+  const packageJsonPath = path.join(targetDir, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      // Use package.json name if it's valid (not "." or empty)
+      if (pkg.name && pkg.name !== "." && pkg.name.trim() !== "") {
+        return pkg.name;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Fallback to directory name
+  return path.basename(path.resolve(targetDir));
+}
+
 export interface InitOptions {
   template?: string;
   dir?: string;
@@ -140,27 +170,59 @@ export async function initCommand(
 ): Promise<void> {
   console.log(chalk.bold("\nMCPize Init\n"));
 
-  // Determine project name
-  let projectName = name;
-  if (!projectName) {
-    const response = await prompt<{ name: string }>({
-      type: "input",
-      name: "name",
-      message: "Project name:",
-      initial: path.basename(process.cwd()),
-    });
-    projectName = response.name;
+  // Check if initializing in current directory
+  const isCurrentDir = name === ".";
+
+  // Determine target directory first
+  let targetDir: string;
+  if (options.dir) {
+    targetDir = options.dir;
+  } else if (isCurrentDir) {
+    targetDir = process.cwd();
+  } else if (name) {
+    targetDir = path.join(process.cwd(), name);
+  } else {
+    // No name provided, will prompt below
+    targetDir = process.cwd();
   }
 
-  // Determine target directory
-  const targetDir = options.dir || path.join(process.cwd(), projectName);
+  // Determine project name
+  let projectName: string;
+  if (name && !isCurrentDir) {
+    // Explicit name provided (not ".")
+    projectName = name;
+  } else if (isCurrentDir || !name) {
+    // Either "." or no name - resolve from package.json or folder name
+    const resolvedName = resolveProjectName(targetDir, name || ".");
 
-  // Check if directory exists
+    if (!name) {
+      // No name provided at all - prompt with resolved name as default
+      const response = await prompt<{ name: string }>({
+        type: "input",
+        name: "name",
+        message: "Project name:",
+        initial: resolvedName,
+      });
+      projectName = response.name;
+      // Update targetDir if user changed the name and we weren't using "."
+      if (!isCurrentDir && projectName !== resolvedName) {
+        targetDir = path.join(process.cwd(), projectName);
+      }
+    } else {
+      // "." was provided - use resolved name
+      projectName = resolvedName;
+    }
+  } else {
+    projectName = name;
+  }
+
+  // Check if directory exists and has files
   if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
+    const displayDir = isCurrentDir ? "Current directory" : `Directory "${projectName}"`;
     const response = await prompt<{ overwrite: boolean }>({
       type: "confirm",
       name: "overwrite",
-      message: `Directory "${projectName}" is not empty. Continue anyway?`,
+      message: `${displayDir} is not empty. Continue anyway?`,
       initial: false,
     });
 
@@ -319,9 +381,12 @@ export async function initCommand(
   }
 
   // Print next steps
-  console.log(chalk.bold.green(`\n✓ Project created!\n`));
+  console.log(chalk.bold.green(`\n✓ Project "${projectName}" created!\n`));
   console.log("Next steps:");
-  console.log(chalk.dim(`  cd ${projectName}`));
+  // Only show cd if not in current directory
+  if (!isCurrentDir) {
+    console.log(chalk.dim(`  cd ${projectName}`));
+  }
 
   // Detect project type for appropriate commands
   const isPython = fs.existsSync(path.join(targetDir, "pyproject.toml"));

@@ -143,3 +143,45 @@ export function clearSession(): void {
   delete config.expiresAt;
   saveConfig(config);
 }
+
+// ============================================
+// Web App URLs (DRY - single source of truth)
+// ============================================
+
+export function getWebAppUrl(): string {
+  return process.env.MCPIZE_WEB_URL || "https://mcpize.com";
+}
+
+export function getGatewayDomain(): string {
+  return process.env.MCPIZE_GATEWAY_DOMAIN || "mcpize.run";
+}
+
+/** Server marketplace page: /mcp/{slug} */
+export function getServerPageUrl(slug: string): string {
+  return `${getWebAppUrl()}/mcp/${slug}`;
+}
+
+/** Server gateway URL: https://{slug}.mcpize.run */
+export function getServerGatewayUrl(slug: string): string {
+  return `https://${slug}.${getGatewayDomain()}`;
+}
+
+/** Developer server manage page */
+export function getServerManageUrl(serverId: string): string {
+  return `${getWebAppUrl()}/developer/servers/${serverId}/manage`;
+}
+
+/** Developer settings page */
+export function getDeveloperSettingsUrl(): string {
+  return `${getWebAppUrl()}/developer/settings`;
+}
+
+/** New server page */
+export function getNewServerUrl(): string {
+  return `${getWebAppUrl()}/servers/new`;
+}
+
+/** Playground with tunnel URL */
+export function getPlaygroundUrl(tunnelUrl: string): string {
+  return `${getWebAppUrl()}/playground?url=${encodeURIComponent(tunnelUrl)}`;
+}

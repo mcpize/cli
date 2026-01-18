@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import ora from "ora";
-import { getToken } from "../lib/config.js";
+import { getToken, getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
 import { loadProjectConfig } from "../lib/project.js";
 import {
   getServerStatus,
@@ -214,9 +214,9 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
   console.log(`Health: ${formatHealthStatus(server.health_status)}`);
   // Show public URLs instead of internal GCP hosting URL
   console.log(
-    `Marketplace: ${chalk.cyan(`https://mcpize.com/server/${server.slug}`)}`,
+    `Marketplace: ${chalk.cyan(getServerPageUrl(server.slug))}`,
   );
-  console.log(`Gateway: ${chalk.cyan(`https://${server.slug}.mcpize.run`)}`);
+  console.log(`Gateway: ${chalk.cyan(getServerGatewayUrl(server.slug))}`);
   console.log();
 
   // Stats

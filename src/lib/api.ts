@@ -875,6 +875,71 @@ export async function deleteServer(
  * @param projectName - Optional project name for the generated manifest
  * @returns mcpize.yaml content as string
  */
+// ============================================
+// CLI Token API
+// ============================================
+
+export interface CliTokenInfo {
+  id: string;
+  name: string;
+  token_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+}
+
+export interface CliTokenCreateResponse extends CliTokenInfo {
+  token: string; // Full token - only shown once!
+}
+
+/**
+ * List all CLI tokens for the authenticated user
+ */
+export async function listCliTokens(): Promise<CliTokenInfo[]> {
+  const result = await edgeFunctionRequest<{ tokens: CliTokenInfo[] }>(
+    "hosting-deploy",
+    "tokens",
+    { method: "GET" },
+  );
+  return result.tokens;
+}
+
+/**
+ * Create a new CLI token
+ */
+export async function createCliToken(
+  name: string,
+  expiresInDays?: number,
+): Promise<CliTokenCreateResponse> {
+  return edgeFunctionRequest<CliTokenCreateResponse>(
+    "hosting-deploy",
+    "tokens",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        expires_in_days: expiresInDays,
+      }),
+    },
+  );
+}
+
+/**
+ * Delete a CLI token by ID
+ */
+export async function deleteCliToken(tokenId: string): Promise<void> {
+  await edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    `tokens/${tokenId}`,
+    { method: "DELETE" },
+  );
+}
+
+// ============================================
+// Analyze Project API
+// ============================================
+
 export async function analyzeProject(
   tarball: Buffer,
   projectName?: string,

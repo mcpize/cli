@@ -4,7 +4,7 @@ import Enquirer from "enquirer";
 import path from "node:path";
 
 const { prompt } = Enquirer;
-import { getToken } from "../lib/config.js";
+import { getToken, getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
 import {
   uploadTarball,
   triggerDeploy,
@@ -503,9 +503,9 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
               ""
             ).toLowerCase();
             console.log(
-              chalk.cyan(`Marketplace: https://mcpize.com/server/${slug}`),
+              chalk.cyan(`Marketplace: ${getServerPageUrl(slug)}`),
             );
-            console.log(chalk.cyan(`Gateway:     https://${slug}.mcpize.run`));
+            console.log(chalk.cyan(`Gateway:     ${getServerGatewayUrl(slug)}`));
 
             // Run post-deploy health check
             const healthSpinner = ora("Verifying deployment...").start();
@@ -521,7 +521,7 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
               healthSpinner.warn("Server may still be starting up");
               displayHealthCheckResult(healthResult);
               console.log(
-                chalk.dim("\nTry: curl https://" + slug + ".mcpize.run"),
+                chalk.dim(`\nTry: curl ${getServerGatewayUrl(slug)}`),
               );
             }
 

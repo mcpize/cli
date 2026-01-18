@@ -5,6 +5,7 @@ import { z } from "zod";
 import chalk from "chalk";
 import ora from "ora";
 import type { McpizeManifest } from "./project.js";
+import { getServerGatewayUrl } from "./config.js";
 
 // ============================================
 // Schema Validation
@@ -540,7 +541,7 @@ export async function runHealthCheck(
   maxRetries = 5,
   retryDelayMs = 3000,
 ): Promise<HealthCheckResult> {
-  const gatewayUrl = `https://${slug}.mcpize.run`;
+  const gatewayUrl = getServerGatewayUrl(slug);
   const result: HealthCheckResult = {
     httpOk: false,
     mcpOk: false,

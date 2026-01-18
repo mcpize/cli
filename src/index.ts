@@ -38,6 +38,7 @@ import { devCommand } from "./commands/dev.js";
 import { rollbackCommand } from "./commands/rollback.js";
 import { deleteCommand } from "./commands/delete.js";
 import { analyzeCommand } from "./commands/analyze.js";
+import { tokenCommand } from "./commands/token.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -373,6 +374,9 @@ program.addCommand(devCommand);
 
 // Rollback command
 program.addCommand(rollbackCommand);
+
+// Token management command
+program.addCommand(tokenCommand);
 
 // Delete command
 program

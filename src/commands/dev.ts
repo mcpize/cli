@@ -10,6 +10,7 @@ import {
   type TunnelConnection,
   type TunnelProviderType,
 } from "../tunnel/index.js";
+import { getPlaygroundUrl as buildPlaygroundUrl } from "../lib/config.js";
 
 interface McpizeManifest {
   runtime?: string;
@@ -242,7 +243,7 @@ function copyToClipboard(text: string): boolean {
  * Get playground URL for tunnel
  */
 function getPlaygroundUrl(tunnelUrl: string): string {
-  return `https://mcpize.com/playground?url=${encodeURIComponent(tunnelUrl)}`;
+  return buildPlaygroundUrl(tunnelUrl);
 }
 
 /**

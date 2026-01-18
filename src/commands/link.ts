@@ -3,7 +3,7 @@ import ora from "ora";
 import Enquirer from "enquirer";
 
 const { prompt } = Enquirer;
-import { getToken } from "../lib/config.js";
+import { getToken, getNewServerUrl } from "../lib/config.js";
 import {
   listServers,
   findServerByRepo,
@@ -139,7 +139,7 @@ async function selectServer(): Promise<ServerInfo | null> {
   if (servers.length === 0) {
     console.log(chalk.yellow("\nNo servers found."));
     console.log(chalk.dim("Create a server with: mcpize deploy"));
-    console.log(chalk.dim("Or create one at: https://mcpize.com/servers/new\n"));
+    console.log(chalk.dim(`Or create one at: ${getNewServerUrl()}\n`));
     return null;
   }
 
