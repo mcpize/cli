@@ -12,6 +12,7 @@ import chalk from "chalk";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import updateNotifier from "update-notifier";
 
 // Read version from package.json
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -397,3 +398,9 @@ program
 
 // Parse arguments
 program.parse();
+
+// Check for updates (non-blocking, cached for 7 days)
+updateNotifier({
+  pkg: { name: pkg.name, version: pkg.version },
+  updateCheckInterval: 1000 * 60 * 60 * 24 * 7,
+}).notify({ isGlobal: true });
