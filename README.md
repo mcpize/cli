@@ -197,10 +197,79 @@ mcpize status --refresh
 |----------|-------------|
 | `MCPIZE_TOKEN` | API token (alternative to `mcpize login`) |
 
+## mcpize.yaml Reference
+
+The `mcpize.yaml` file configures your MCP server deployment:
+
+```yaml
+version: 1
+name: my-server
+description: My MCP server
+runtime: typescript  # typescript, python, php, container
+entry: src/index.ts
+
+build:
+  install: npm ci
+  command: npm run build
+  # dockerfile: Dockerfile  # for container runtime
+
+startCommand:
+  type: http  # http, sse, stdio
+  command: node dist/index.js
+  # args: ["--port", "8080"]
+
+# For STDIO servers (auto-bridged to HTTP)
+# bridge:
+#   mode: stdio
+
+# Publisher secrets (infrastructure credentials)
+secrets:
+  - name: OPENAI_API_KEY
+    required: true
+    description: OpenAI API key
+
+# Subscriber credentials (per-user API keys)
+# credentials:
+#   - name: USER_TOKEN
+#     required: true
+#     docs_url: https://example.com/docs
+#     mapping:
+#       env: API_TOKEN
+# credentials_mode: per_user
+```
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `version` | Yes | Schema version (always `1`) |
+| `runtime` | Yes | `typescript`, `python`, `php`, or `container` |
+| `entry` | No | Entry point file |
+| `build.install` | No | Install command (e.g., `npm ci`) |
+| `build.command` | No | Build command (e.g., `npm run build`) |
+| `startCommand.type` | No | Transport: `http`, `sse`, or `stdio` |
+| `startCommand.command` | No | Start command |
+| `bridge.mode` | No | STDIO bridging mode (auto-wraps with mcp-proxy) |
+| `secrets` | No | Publisher infrastructure secrets |
+| `credentials` | No | Subscriber BYOK credentials |
+
+## IDE Autocomplete
+
+Add this to `.vscode/settings.json` for mcpize.yaml autocomplete:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/mcpize/cli/main/schemas/mcpize.schema.json": "mcpize.yaml"
+  }
+}
+```
+
 ## Links
 
 - [Website](https://mcpize.com)
-- [Documentation](https://docs.mcpize.com)
+- [mcpize.yaml Reference](https://mcpize.com/case/mcpize-yaml)
+- [JSON Schema](https://raw.githubusercontent.com/mcpize/cli/main/schemas/mcpize.schema.json)
 
 ## License
 

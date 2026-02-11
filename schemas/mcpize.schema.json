@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/mcpize/cli/main/schemas/mcpize.schema.json",
+  "title": "MCPize Manifest",
+  "description": "Configuration schema for mcpize.yaml deployment manifest",
+  "type": "object",
+  "required": ["runtime"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Schema version number",
+      "default": 1,
+      "minimum": 1
+    },
+    "name": {
+      "type": "string",
+      "description": "Server name (auto-detected from package.json if missing)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of the server"
+    },
+    "runtime": {
+      "type": "string",
+      "enum": ["typescript", "python", "php", "container"],
+      "description": "Server runtime environment"
+    },
+    "entry": {
+      "type": "string",
+      "description": "Entry point file path (e.g., src/index.ts)"
+    },
+    "pythonModulePath": {
+      "type": "string",
+      "description": "Python module path for pyproject.toml-based entry points (e.g., mymodule.server)"
+    },
+    "build": {
+      "type": "object",
+      "description": "Build configuration",
+      "properties": {
+        "install": {
+          "type": "string",
+          "description": "Dependency installation command (e.g., npm ci, pip install -r requirements.txt)"
+        },
+        "command": {
+          "type": "string",
+          "description": "Build/compile command (e.g., npm run build, tsc)"
+        },
+        "dockerfile": {
+          "type": "string",
+          "description": "Path to Dockerfile (container runtime only)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "startCommand": {
+      "type": "object",
+      "description": "Server start configuration",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["http", "sse", "stdio"],
+          "description": "Transport protocol"
+        },
+        "command": {
+          "type": "string",
+          "description": "Start command (e.g., node dist/index.js)"
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional command arguments"
+        }
+      },
+      "additionalProperties": false
+    },
+    "bridge": {
+      "type": "object",
+      "description": "Bridge configuration for STDIO auto-wrapping with mcp-proxy",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["http", "sse", "stdio"],
+          "description": "Bridge mode (stdio = auto-generate Dockerfile with mcp-proxy)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "secrets": {
+      "type": "array",
+      "description": "Publisher secrets (infrastructure credentials provided at deploy time)",
+      "items": {
+        "$ref": "#/$defs/secretDefinition"
+      }
+    },
+    "credentials": {
+      "type": "array",
+      "description": "Subscriber credentials (per-user API keys provided at subscription time)",
+      "items": {
+        "$ref": "#/$defs/credentialDefinition"
+      }
+    },
+    "credentials_mode": {
+      "type": "string",
+      "enum": ["shared", "per_user"],
+      "description": "Credential ownership model",
+      "default": "shared"
+    }
+  },
+  "$defs": {
+    "secretDefinition": {
+      "type": "object",
+      "required": ["name", "required"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Environment variable name",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether deployment fails without this secret"
+        },
+        "description": {
+          "type": "string",
+          "description": "Help text shown in Dashboard"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Validation regex pattern"
+        },
+        "placeholder": {
+          "type": "string",
+          "description": "Example value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "credentialDefinition": {
+      "type": "object",
+      "required": ["name", "required"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Credential name",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether connection fails without this credential"
+        },
+        "description": {
+          "type": "string",
+          "description": "Help text for subscribers"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Validation regex pattern"
+        },
+        "placeholder": {
+          "type": "string",
+          "description": "Example value"
+        },
+        "docs_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to documentation on how to obtain this credential"
+        },
+        "mapping": {
+          "type": "object",
+          "description": "Runtime injection configuration",
+          "properties": {
+            "env": {
+              "type": "string",
+              "description": "Environment variable name at runtime"
+            },
+            "header": {
+              "type": "string",
+              "description": "HTTP header name for client-side injection"
+            },
+            "arg": {
+              "type": "string",
+              "description": "CLI argument pattern"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "version": 1,
+      "runtime": "typescript",
+      "entry": "src/index.ts",
+      "build": {
+        "install": "npm ci",
+        "command": "npm run build"
+      },
+      "startCommand": {
+        "type": "http",
+        "command": "node dist/index.js"
+      },
+      "secrets": [
+        {
+          "name": "OPENAI_API_KEY",
+          "required": true,
+          "description": "OpenAI API key"
+        }
+      ]
+    }
+  ]
+}

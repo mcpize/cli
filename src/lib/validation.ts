@@ -11,27 +11,58 @@ import { getServerGatewayUrl } from "./config.js";
 // Schema Validation
 // ============================================
 
+const SecretSchema = z.object({
+  name: z.string().min(1),
+  required: z.boolean(),
+  description: z.string().optional(),
+  pattern: z.string().optional(),
+  placeholder: z.string().optional(),
+});
+
+const CredentialSchema = SecretSchema.extend({
+  docs_url: z.string().url().optional(),
+  mapping: z
+    .object({
+      env: z.string().optional(),
+      header: z.string().optional(),
+      arg: z.string().optional(),
+    })
+    .optional(),
+});
+
 const ManifestSchema = z.object({
   version: z.number().min(1).max(1),
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
-  runtime: z.enum(["typescript", "python", "php"]),
+  runtime: z.enum(["typescript", "python", "php", "container"]),
   entry: z.string().optional(),
+  pythonModulePath: z.string().optional(),
   build: z
     .object({
       install: z.string().optional(),
       command: z.string().optional(),
+      dockerfile: z.string().optional(),
     })
     .optional(),
   startCommand: z
     .object({
-      type: z.enum(["http", "stdio"]),
-      command: z.string().min(1),
+      type: z.enum(["http", "sse", "stdio"]),
+      command: z.string().optional(),
+      args: z.array(z.string()).optional(),
     })
     .optional(),
+  bridge: z
+    .object({
+      mode: z.enum(["http", "sse", "stdio"]),
+    })
+    .optional(),
+  secrets: z.array(SecretSchema).optional(),
+  credentials: z.array(CredentialSchema).optional(),
+  credentials_mode: z.enum(["shared", "per_user"]).optional(),
   configSchema: z
     .object({
-      source: z.enum(["code", "inline"]),
+      source: z.enum(["code", "inline", "url"]),
+      inline: z.unknown().optional(),
     })
     .optional(),
 });

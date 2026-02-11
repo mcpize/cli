@@ -8,22 +8,49 @@ export interface ProjectConfig {
   branch?: string;
 }
 
+export interface SecretDefinition {
+  name: string;
+  required: boolean;
+  description?: string;
+  pattern?: string;
+  placeholder?: string;
+}
+
+export interface CredentialDefinition extends SecretDefinition {
+  docs_url?: string;
+  mapping?: {
+    env?: string;
+    header?: string;
+    arg?: string;
+  };
+}
+
 export interface McpizeManifest {
   version: number;
   name?: string;
   description?: string;
-  runtime: "typescript" | "python" | "php";
+  runtime: "typescript" | "python" | "php" | "container";
   entry?: string;
+  pythonModulePath?: string;
   build?: {
     install?: string;
     command?: string;
+    dockerfile?: string;
   };
   startCommand?: {
-    type: "http" | "stdio";
-    command: string;
+    type: "http" | "sse" | "stdio";
+    command?: string;
+    args?: string[];
   };
+  bridge?: {
+    mode: "http" | "sse" | "stdio";
+  };
+  secrets?: SecretDefinition[];
+  credentials?: CredentialDefinition[];
+  credentials_mode?: "shared" | "per_user";
   configSchema?: {
-    source: "code" | "inline";
+    source: "code" | "inline" | "url";
+    inline?: unknown;
   };
 }
 
