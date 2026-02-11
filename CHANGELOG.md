@@ -2,6 +2,19 @@
 
 All notable changes to MCPize CLI.
 
+## [1.0.40] - 2025-02-11
+
+### Added
+- **Rich output for `mcpize analyze`**: Now shows detection summary with confidence level, warnings, detected secrets/credentials, and private registry hints
+- Confidence bar visualization (e.g., `████████░░ 85% (High)`)
+- Color-coded confidence levels: green (high), yellow (medium), red (low)
+- Low confidence prompts user to review before saving
+- Private npm registry detection triggers NPM_TOKEN hint
+
+### Changed
+- `analyzeProject()` API now returns rich `AnalyzeResult` with full detection metadata
+- Simplified terminal output format to avoid ANSI alignment issues
+
 ## [1.0.15] - 2025-12-06
 
 ### Added

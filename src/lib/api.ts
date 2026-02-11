@@ -940,13 +940,135 @@ export async function deleteCliToken(tokenId: string): Promise<void> {
 // Analyze Project API
 // ============================================
 
+/**
+ * Detected secret from repository analysis
+ */
+export interface DetectedSecret {
+  name: string;
+  value?: string;
+  source: '.env' | '.env.example' | '.env.template' | '.env.sample' | 'manifest' | string | null;
+  required: boolean;
+  description?: string;
+  placeholder?: string;
+}
+
+/**
+ * Credential definition (subscriber-provided API keys)
+ */
+export interface CredentialDefinition {
+  name: string;
+  required?: boolean;
+  description?: string;
+  docs_url?: string;
+  mapping?: {
+    env?: string;
+    header?: string;
+    arg?: string;
+  };
+}
+
+/**
+ * Private registry detection info
+ */
+export interface PrivateRegistryInfo {
+  detected: boolean;
+  registryType?: 'codeartifact' | 'artifactory' | 'nexus' | 'github' | 'other';
+  domain?: string;
+  needsNpmToken: boolean;
+}
+
+/**
+ * Detected manifest configuration
+ */
+export interface DetectedManifest {
+  version: number;
+  name?: string;
+  description?: string;
+  runtime: 'typescript' | 'python' | 'php' | 'container';
+  entry?: string;
+  pythonModulePath?: string;
+  build?: {
+    install?: string;
+    command?: string;
+    dockerfile?: string;
+  };
+  startCommand?: {
+    type: 'stdio' | 'http' | 'sse';
+    command?: string;
+    args?: string[];
+  };
+  bridge?: {
+    mode: 'stdio' | 'http' | 'sse';
+  };
+  secrets?: Array<{ name: string; required?: boolean; description?: string }>;
+  credentials?: CredentialDefinition[];
+  credentials_mode?: 'per_user' | 'shared';
+  hasDockerfile?: boolean;
+  transport?: 'stdio' | 'http';
+}
+
+/**
+ * README extraction data
+ */
+export interface ReadmeExtraction {
+  shortDescription: string | null;
+  longDescription: string | null;
+  tools: string[];
+  envVars: string[];
+  author: string | null;
+  license: string | null;
+  categoryHints: string[];
+  tags: string[];
+  heroImage: string | null;
+  displayName: string | null;
+  slug: string | null;
+  website: string | null;
+}
+
+/**
+ * Full analysis result from the API
+ */
+export interface AnalyzeResult {
+  success: boolean;
+  yaml?: string;
+  manifest: DetectedManifest | null;
+  detected: {
+    serverName: string;
+    description: string;
+    runtime: 'typescript' | 'python' | 'php' | 'container';
+    entryPoint: string;
+    buildCommand: string;
+    transport: 'stdio' | 'http';
+  };
+  confidence: 'high' | 'medium' | 'low';
+  confidencePercent: number;
+  warnings: string[];
+  secrets: DetectedSecret[];
+  credentials: CredentialDefinition[];
+  credentials_mode: 'per_user' | 'shared';
+  hasDockerfile: boolean;
+  privateRegistry?: PrivateRegistryInfo;
+  source: string;
+  readme: ReadmeExtraction | null;
+}
+
+/**
+ * Analyze a project tarball and return rich detection result
+ * No authentication required - just project analysis
+ *
+ * @param tarball - Gzipped tarball of the project
+ * @param projectName - Optional project name for the generated manifest
+ * @returns Full analysis result with YAML, confidence, warnings, etc.
+ */
 export async function analyzeProject(
   tarball: Buffer,
   projectName?: string,
-): Promise<string> {
+): Promise<AnalyzeResult> {
   const baseUrl = getFunctionsUrl();
-  const queryParams = projectName ? `?name=${encodeURIComponent(projectName)}` : "";
-  const url = `${baseUrl}/analyze-repository/tarball${queryParams}`;
+  const params = new URLSearchParams({ format: "json" });
+  if (projectName) params.set("name", projectName);
+
+  const url = `${baseUrl}/analyze-repository/tarball?${params}`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -967,5 +1089,5 @@ export async function analyzeProject(
     throw new Error(errorMessage);
   }
 
-  return response.text();
+  return response.json() as Promise<AnalyzeResult>;
 }

@@ -4,10 +4,108 @@ import Enquirer from "enquirer";
 import { writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
 import { createTarball, formatBytes } from "../lib/tarball.js";
-import { analyzeProject } from "../lib/api.js";
+import { analyzeProject, type AnalyzeResult, type DetectedSecret, type CredentialDefinition } from "../lib/api.js";
 import { hasManifest, loadPackageJson } from "../lib/project.js";
 
 const { prompt } = Enquirer;
+
+/**
+ * Get confidence bar visualization
+ */
+function getConfidenceBar(percent: number): string {
+  const filled = Math.round(percent / 10);
+  const empty = 10 - filled;
+  return chalk.green("█".repeat(filled)) + chalk.dim("░".repeat(empty));
+}
+
+/**
+ * Get confidence color based on level
+ */
+function getConfidenceColor(confidence: 'high' | 'medium' | 'low'): typeof chalk {
+  switch (confidence) {
+    case 'high': return chalk.green;
+    case 'medium': return chalk.yellow;
+    case 'low': return chalk.red;
+  }
+}
+
+/**
+ * Print detection summary
+ */
+function printDetectionSummary(result: AnalyzeResult): void {
+  const confidenceColor = getConfidenceColor(result.confidence);
+  const bar = getConfidenceBar(result.confidencePercent);
+  const confidenceLabel = result.confidence.charAt(0).toUpperCase() + result.confidence.slice(1);
+
+  console.log(chalk.bold("\nDetection Summary"));
+  console.log(chalk.dim("─".repeat(40)));
+  console.log(`  Confidence:  ${bar} ${result.confidencePercent}% ${confidenceColor(`(${confidenceLabel})`)}`);
+  console.log(`  Source:      ${chalk.dim(result.source)}`);
+  console.log();
+  console.log(`  Runtime:     ${chalk.cyan(result.detected.runtime)}`);
+  console.log(`  Entry:       ${chalk.cyan(result.detected.entryPoint || 'auto-detect')}`);
+  console.log(`  Transport:   ${chalk.cyan(result.detected.transport)}`);
+  if (result.detected.buildCommand) {
+    console.log(`  Build:       ${chalk.dim(result.detected.buildCommand)}`);
+  }
+}
+
+/**
+ * Print warnings section
+ */
+function printWarnings(warnings: string[]): void {
+  if (warnings.length === 0) return;
+
+  console.log(chalk.yellow(`\n⚠ Warnings (${warnings.length}):`));
+  for (const warning of warnings) {
+    console.log(chalk.yellow(`  • ${warning}`));
+  }
+}
+
+/**
+ * Print secrets and credentials
+ */
+function printSecretsAndCredentials(
+  secrets: DetectedSecret[],
+  credentials: CredentialDefinition[],
+  credentialsMode: 'per_user' | 'shared'
+): void {
+  if (secrets.length > 0) {
+    console.log(chalk.bold(`\nDetected Secrets (${secrets.length}):`));
+    for (const secret of secrets) {
+      const required = secret.required ? chalk.red("required") : chalk.dim("optional");
+      const desc = secret.description ? chalk.dim(` - ${secret.description}`) : "";
+      console.log(`  • ${chalk.cyan(secret.name)} (${required})${desc}`);
+    }
+  }
+
+  if (credentials.length > 0) {
+    const modeLabel = credentialsMode === 'per_user' ? chalk.blue("per_user") : chalk.dim("shared");
+    console.log(chalk.bold(`\nDetected Credentials (${credentials.length}) [${modeLabel}]:`));
+    for (const cred of credentials) {
+      const required = cred.required !== false ? chalk.red("required") : chalk.dim("optional");
+      const desc = cred.description ? chalk.dim(` - ${cred.description}`) : "";
+      console.log(`  • ${chalk.cyan(cred.name)} (${required})${desc}`);
+      if (cred.docs_url) {
+        console.log(chalk.dim(`    Docs: ${cred.docs_url}`));
+      }
+    }
+  }
+
+  // Private registry warning
+  // Note: privateRegistry is included in the result if detected
+}
+
+/**
+ * Print private registry warning if detected
+ */
+function printPrivateRegistryWarning(result: AnalyzeResult): void {
+  if (result.privateRegistry?.detected && result.privateRegistry.needsNpmToken) {
+    console.log(chalk.yellow("\n⚠ Private npm registry detected:"));
+    console.log(chalk.dim(`  Registry: ${result.privateRegistry.domain || 'unknown'}`));
+    console.log(chalk.dim("  You may need to add NPM_TOKEN to your secrets for deployment."));
+  }
+}
 
 // Size limits
 const MAX_TARBALL_SIZE = 50 * 1024 * 1024; // 50 MB - Edge function limit
@@ -152,9 +250,9 @@ export async function analyzeCommand(options: AnalyzeOptions): Promise<void> {
 
   // Analyze via API
   const analyzeSpinner = ora("Analyzing project...").start();
-  let yaml: string;
+  let result: AnalyzeResult;
   try {
-    yaml = await analyzeProject(tarball, projectName);
+    result = await analyzeProject(tarball, projectName);
     analyzeSpinner.succeed("Analysis complete");
   } catch (error) {
     analyzeSpinner.fail("Analysis failed");
@@ -164,7 +262,24 @@ export async function analyzeCommand(options: AnalyzeOptions): Promise<void> {
     process.exit(1);
   }
 
-  // Preview
+  // Show detection summary
+  printDetectionSummary(result);
+
+  // Show secrets and credentials
+  printSecretsAndCredentials(
+    result.secrets,
+    result.credentials,
+    result.credentials_mode
+  );
+
+  // Show private registry warning if detected
+  printPrivateRegistryWarning(result);
+
+  // Show warnings
+  printWarnings(result.warnings);
+
+  // Preview YAML
+  const yaml = result.yaml || "";
   console.log("\n" + chalk.dim("─".repeat(50)));
   console.log(yaml);
   console.log(chalk.dim("─".repeat(50)) + "\n");
@@ -174,15 +289,18 @@ export async function analyzeCommand(options: AnalyzeOptions): Promise<void> {
     return;
   }
 
-  // Confirm unless --yes
+  // Confirm - adjust default based on confidence
   let shouldSave = options.yes;
   if (!shouldSave) {
+    const defaultYes = result.confidence === 'high' || result.confidence === 'medium';
     try {
       const response = await prompt<{ confirm: boolean }>({
         type: "confirm",
         name: "confirm",
-        message: "Save mcpize.yaml?",
-        initial: true,
+        message: result.confidence === 'low'
+          ? "Low confidence detection. Save mcpize.yaml anyway?"
+          : "Save mcpize.yaml?",
+        initial: defaultYes,
       });
       shouldSave = response.confirm;
     } catch {
