@@ -222,12 +222,14 @@ async function edgeFunctionRequest<T>(
     wrapNetworkError(error);
   }
 
+  const rawText = await response.text();
+
   if (!response.ok) {
     let body: unknown;
     try {
-      body = await response.json();
+      body = JSON.parse(rawText);
     } catch {
-      body = await response.text();
+      body = rawText;
     }
 
     // Handle auth errors with clear message
@@ -246,7 +248,11 @@ async function edgeFunctionRequest<T>(
     throw new APIError(errorMessage, response.status, body, isRetryable);
   }
 
-  return response.json() as Promise<T>;
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    return rawText as T;
+  }
 }
 
 export async function uploadTarball(
@@ -272,12 +278,14 @@ export async function uploadTarball(
     body: tarballBuffer,
   });
 
+  const rawText = await response.text();
+
   if (!response.ok) {
     let body: unknown;
     try {
-      body = await response.json();
+      body = JSON.parse(rawText);
     } catch {
-      body = await response.text();
+      body = rawText;
     }
 
     const errorMessage =
@@ -288,7 +296,11 @@ export async function uploadTarball(
     throw new APIError(errorMessage, response.status, body);
   }
 
-  return response.json() as Promise<UploadResponse>;
+  try {
+    return JSON.parse(rawText) as UploadResponse;
+  } catch {
+    return rawText as unknown as UploadResponse;
+  }
 }
 
 export async function triggerDeploy(
