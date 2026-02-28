@@ -475,7 +475,7 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
       };
 
       while (true) {
-        await new Promise((resolve) => setTimeout(resolve, 10000)); // Poll every 10s
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Poll every 5s
 
         try {
           const status = await getDeploymentStatus(deploymentId);
