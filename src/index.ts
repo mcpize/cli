@@ -39,6 +39,7 @@ import { devCommand } from "./commands/dev.js";
 import { rollbackCommand } from "./commands/rollback.js";
 import { deleteCommand } from "./commands/delete.js";
 import { analyzeCommand } from "./commands/analyze.js";
+import { diagnoseCommand } from "./commands/diagnose.js";
 import { tokenCommand } from "./commands/token.js";
 import { setTokenOverride } from "./lib/auth.js";
 
@@ -388,6 +389,23 @@ program
   .action(async (options) => {
     try {
       await deleteCommand(options);
+    } catch (error) {
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      process.exit(1);
+    }
+  });
+
+// Diagnose command
+program
+  .command("diagnose")
+  .description("Open AI-powered diagnosis for a failed deployment")
+  .option("--server <id>", "Server ID (uses linked project if not specified)")
+  .option("-d, --deployment <id>", "Deployment ID (uses latest failed if not specified)")
+  .action(async (options) => {
+    try {
+      await diagnoseCommand(options);
     } catch (error) {
       console.error(
         chalk.red(error instanceof Error ? error.message : String(error)),
