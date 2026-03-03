@@ -12,7 +12,7 @@ import { getServerGatewayUrl } from "./config.js";
 // ============================================
 
 const SecretSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).regex(/^[A-Z][A-Z0-9_]*$/, "Must be SCREAMING_SNAKE_CASE (e.g., API_KEY)"),
   required: z.boolean(),
   description: z.string().optional(),
   pattern: z.string().optional(),
@@ -31,7 +31,7 @@ const CredentialSchema = SecretSchema.extend({
 });
 
 const ManifestSchema = z.object({
-  version: z.number().min(1).max(1),
+  version: z.number().min(1).max(1).optional(),
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
   runtime: z.enum(["typescript", "python", "php", "container"]),
@@ -59,12 +59,7 @@ const ManifestSchema = z.object({
   secrets: z.array(SecretSchema).optional(),
   credentials: z.array(CredentialSchema).optional(),
   credentials_mode: z.enum(["shared", "per_user"]).optional(),
-  configSchema: z
-    .object({
-      source: z.enum(["code", "inline", "url"]),
-      inline: z.unknown().optional(),
-    })
-    .optional(),
+  // configSchema: reserved for future use, not yet supported at runtime
 });
 
 export interface ValidationResult {
@@ -88,6 +83,22 @@ export function validateManifest(manifest: unknown): ValidationResult {
       const path = issue.path.join(".");
       result.errors.push(`${path}: ${issue.message}`);
     }
+  }
+
+  // Warn about fields that are accepted but have no runtime effect
+  const m = manifest as Record<string, unknown>;
+
+  if (m?.configSchema !== undefined) {
+    result.warnings.push(
+      "configSchema is not yet supported at runtime and will be ignored.",
+    );
+  }
+
+  const credentials = m?.credentials as Array<Record<string, unknown>> | undefined;
+  if (credentials?.some((c) => (c.mapping as Record<string, unknown>)?.env !== undefined)) {
+    result.warnings.push(
+      "credentials.mapping.env has no effect at runtime. The credential name is used as the ENV var directly.",
+    );
   }
 
   return result;

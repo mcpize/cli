@@ -93,7 +93,7 @@ export async function secretsSetCommand(
   const environment = options.environment || "production";
 
   // Validate name format
-  if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
     console.error(
       chalk.red(
         "Secret name must be uppercase letters, numbers, and underscores (e.g., OPENAI_API_KEY)",
@@ -274,7 +274,7 @@ function parseEnvFile(content: string): Array<{ name: string; value: string }> {
     }
 
     // Match KEY=value or KEY="value" or KEY='value'
-    const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    const match = trimmed.match(/^([A-Z][A-Z0-9_]*)=(.*)$/);
     if (!match) {
       continue;
     }
