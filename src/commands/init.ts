@@ -127,14 +127,6 @@ async function runPostInit(
     // Build environment with all options
     const optionsEnv = optionsToEnv(options);
 
-    // Check if any options were passed (excluding internal ones)
-    const hasCustomOptions = Object.keys(optionsEnv).length > 0;
-
-    if (!hasCustomOptions) {
-      spinner.info("Skipping post-init (no custom options provided)");
-      return true;
-    }
-
     const env = {
       ...process.env,
       ...optionsEnv,
