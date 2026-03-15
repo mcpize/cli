@@ -126,7 +126,28 @@ function getDevCommand(
       };
     }
 
-    // Check for uvicorn (FastAPI/FastMCP)
+    // Read start command from mcpize.yaml (most reliable)
+    const manifestPath = join(cwd, "mcpize.yaml");
+    if (existsSync(manifestPath)) {
+      try {
+        const manifest = parseYaml(
+          readFileSync(manifestPath, "utf-8"),
+        ) as McpizeManifest;
+        if (manifest.startCommand?.command) {
+          // Convert .venv/bin/python to uv run python for local dev
+          const startCmd = manifest.startCommand.command.replace(
+            /^\.venv\/bin\/python\b/,
+            "uv run python",
+          );
+          const parts = startCmd.split(/\s+/);
+          return { cmd: parts[0], args: parts.slice(1) };
+        }
+      } catch {
+        // Fall through to legacy detection
+      }
+    }
+
+    // Legacy fallback: check requirements.txt
     const reqPath = join(cwd, "requirements.txt");
     if (existsSync(reqPath)) {
       const reqs = readFileSync(reqPath, "utf-8");
@@ -137,19 +158,10 @@ function getDevCommand(
         };
       }
     }
-    // Fallback: python with watchdog
+    // Last resort fallback
     return {
       cmd: "python",
-      args: [
-        "-m",
-        "watchdog.watchmedo",
-        "auto-restart",
-        "--patterns=*.py",
-        "--recursive",
-        "--",
-        "python",
-        "src/main.py",
-      ],
+      args: ["-m", "src.main"],
     };
   }
 
