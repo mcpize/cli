@@ -22,6 +22,7 @@ interface McpizeManifest {
   build?: {
     command?: string;
   };
+  secrets?: Array<{ name: string; required: boolean; description?: string }>;
 }
 
 interface DevOptions {
@@ -207,6 +208,42 @@ function loadEnvVars(cwd: string): Record<string, string> {
   }
 
   return env;
+}
+
+/**
+ * Check that required secrets from mcpize.yaml are present in env
+ */
+function checkManifestSecrets(
+  cwd: string,
+  envVars: Record<string, string>,
+): void {
+  const manifestPath = join(cwd, "mcpize.yaml");
+  if (!existsSync(manifestPath)) return;
+
+  try {
+    const manifest = parseYaml(
+      readFileSync(manifestPath, "utf-8"),
+    ) as McpizeManifest;
+    const secrets = manifest.secrets || [];
+    const missing = secrets.filter(
+      (s) => s.required && !envVars[s.name] && !process.env[s.name],
+    );
+
+    if (missing.length > 0) {
+      console.log(chalk.yellow(`\n⚠ Missing required secrets:`));
+      for (const s of missing) {
+        const desc = s.description ? chalk.gray(` — ${s.description}`) : "";
+        console.log(`  ${chalk.white(s.name)}${desc}`);
+      }
+      console.log(
+        chalk.gray(
+          `\n  Add them to .env file or set as environment variables\n`,
+        ),
+      );
+    }
+  } catch {
+    // Ignore parse errors
+  }
 }
 
 /**
@@ -456,7 +493,10 @@ export const devCommand = new Command("dev")
       console.log(`Env vars: ${chalk.cyan(envCount)} loaded from .env`);
     }
 
-    // 4. Check if port is available
+    // 4. Check required secrets from manifest
+    checkManifestSecrets(cwd, envVars);
+
+    // 5. Check if port is available
     const portAvailable = await isPortAvailable(port);
     if (!portAvailable) {
       console.log(chalk.red(`\n✖ Port ${port} is already in use`));
