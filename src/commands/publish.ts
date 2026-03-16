@@ -12,6 +12,8 @@ import {
   publishServer,
   generateLogo,
   saveLogoUrl,
+  cleanServerName,
+  saveServerName,
   type GeneratedPlan,
 } from "../lib/api.js";
 import { getServerPageUrl, getServerManageUrl } from "../lib/config.js";
@@ -200,6 +202,21 @@ async function runAutoPublish(
 
   const failures: string[] = [];
 
+  // Step 0: Clean server name
+  const nameSpinner = ora("Cleaning server name...").start();
+  try {
+    const cleaned = await cleanServerName(serverName);
+    await saveServerName(serverId, cleaned.displayName);
+    serverName = cleaned.displayName;
+    nameSpinner.succeed(`Name: ${cleaned.displayName}`);
+  } catch (error) {
+    nameSpinner.fail("Failed to clean name");
+    console.error(
+      chalk.red(error instanceof Error ? error.message : String(error)),
+    );
+    failures.push("name cleaning");
+  }
+
   // Step 1: Generate SEO
   const seoSpinner = ora("Generating SEO content...").start();
   try {
@@ -209,6 +226,8 @@ async function runAutoPublish(
       category: seo.category,
       short_description: seo.short_description,
       long_description: seo.long_description,
+      seo_title: seo.seo_title,
+      seo_description: seo.seo_description,
       tags: seo.tags,
     });
     seoSpinner.succeed(
@@ -324,6 +343,8 @@ async function runGenerateSEO(
       category: seo.category,
       short_description: seo.short_description,
       long_description: seo.long_description,
+      seo_title: seo.seo_title,
+      seo_description: seo.seo_description,
       tags: seo.tags,
     });
     saveSpinner.succeed("SEO content saved!");
@@ -482,6 +503,7 @@ function printDryRun(options: PublishOptions): void {
   if (options.unpublish) {
     steps.push("Unpublish from marketplace");
   } else if (options.auto) {
+    steps.push("Clean server name (AI)");
     steps.push("Generate SEO content (AI)");
     steps.push(
       options.pricing

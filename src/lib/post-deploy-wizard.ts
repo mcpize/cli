@@ -250,6 +250,8 @@ export async function setupSEO(
           category: seo.category,
           short_description: seo.short_description,
           long_description: seo.long_description,
+          seo_title: seo.seo_title,
+          seo_description: seo.seo_description,
           tags: seo.tags,
         });
         saveSpinner.succeed("SEO content saved!");

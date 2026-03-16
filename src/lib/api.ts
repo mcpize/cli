@@ -672,6 +672,8 @@ export interface GeneratedSEO {
   category: string;
   short_description: string;
   long_description: string;
+  seo_title: string;
+  seo_description: string;
   tags: string[];
 }
 
@@ -699,6 +701,8 @@ export async function generateSEO(
     category: raw.category,
     short_description: raw.description,
     long_description: raw.longDescription,
+    seo_title: raw.seoTitle,
+    seo_description: raw.seoDescription,
     tags: raw.tags,
   };
 }
@@ -726,6 +730,8 @@ export interface SaveSEORequest {
   category?: string;
   short_description?: string;
   long_description?: string;
+  seo_title?: string;
+  seo_description?: string;
   tags?: string[];
 }
 
@@ -810,6 +816,39 @@ export async function discoverCapabilities(
       skip_auth: true, // Hosted servers don't need auth for discovery
     }),
   });
+}
+
+// ============================================
+// Server Name Cleaning API
+// ============================================
+
+export async function cleanServerName(
+  name: string,
+): Promise<{ displayName: string; slug: string }> {
+  return edgeFunctionRequest<{ displayName: string; slug: string }>(
+    "clean-server-name",
+    "",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    },
+  );
+}
+
+export async function saveServerName(
+  serverId: string,
+  name: string,
+): Promise<{ success: boolean }> {
+  return edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    "update-server",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server_id: serverId, name }),
+    },
+  );
 }
 
 // ============================================
