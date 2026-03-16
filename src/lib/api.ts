@@ -813,6 +813,42 @@ export async function discoverCapabilities(
 }
 
 // ============================================
+// Logo Generation API
+// ============================================
+
+export async function generateLogo(
+  serverId: string,
+  serverName: string,
+  serverDescription: string,
+  slug: string,
+): Promise<{ logoUrl: string; success: boolean }> {
+  return edgeFunctionRequest<{ logoUrl: string; success: boolean }>(
+    "generate-server-logo",
+    "",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverId, serverName, serverDescription, slug }),
+    },
+  );
+}
+
+export async function saveLogoUrl(
+  serverId: string,
+  logoUrl: string,
+): Promise<{ success: boolean }> {
+  return edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    "update-server",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server_id: serverId, logo_url: logoUrl }),
+    },
+  );
+}
+
+// ============================================
 // Rollback API
 // ============================================
 

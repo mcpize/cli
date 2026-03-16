@@ -57,6 +57,7 @@ Browser login opens mcpize.com, you sign in with Google/GitHub/email, and the CL
 | `mcpize secrets delete <name>` | Delete a secret (alias: `rm`) |
 | `mcpize doctor` | Run pre-deploy diagnostics |
 | `mcpize whoami` | Show current authenticated user |
+| `mcpize publish` | Manage marketplace listing (SEO, pricing, logo) |
 | `mcpize dev` | Run local dev server with hot reload |
 
 ## Local Development
@@ -166,6 +167,29 @@ mcpize link --server <server-id>
 mcpize link --force
 ```
 
+## Publish
+
+Manage your marketplace listing — SEO, pricing, logo, and publish status:
+
+```bash
+# Full autopilot (generate SEO, logo, mark free, publish)
+mcpize publish --auto
+
+# Autopilot with paid pricing
+mcpize publish --auto --pricing "Free 100 req/day, Pro $10/mo"
+
+# Granular control
+mcpize publish --generate-seo        # AI generates SEO metadata
+mcpize publish --free                # Mark as free
+mcpize publish --pricing "Free 100 req/day, Pro $10/mo"  # AI generates pricing tiers
+mcpize publish --generate-logo       # AI generates logo
+mcpize publish --show                # Show current listing status
+mcpize publish --unpublish           # Take down from marketplace
+
+# Interactive (walks through each step)
+mcpize publish
+```
+
 ## Options
 
 ```bash
@@ -180,6 +204,9 @@ mcpize deploy --no-wait
 
 # Auto-create server if not linked
 mcpize deploy --yes
+
+# Skip post-deploy setup wizard
+mcpize deploy --skip-wizard
 
 # Force refresh (ignore cache)
 mcpize status --refresh

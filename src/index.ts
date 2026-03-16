@@ -41,6 +41,7 @@ import { deleteCommand } from "./commands/delete.js";
 import { analyzeCommand } from "./commands/analyze.js";
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { tokenCommand } from "./commands/token.js";
+import { publishCommand } from "./commands/publish.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -140,6 +141,7 @@ program
   )
   .option("--notes <notes>", "Add deployment notes")
   .option("-y, --yes", "Auto-create server if not linked (non-interactive)")
+  .option("--skip-wizard", "Skip post-deploy setup wizard")
   .action(async (options) => {
     try {
       await deployCommand(options);
@@ -406,6 +408,33 @@ program
   .action(async (options) => {
     try {
       await diagnoseCommand(options);
+    } catch (error) {
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      process.exit(1);
+    }
+  });
+
+// Publish command
+program
+  .command("publish")
+  .description("Manage marketplace listing (SEO, pricing, logo, publish)")
+  .option("--server <id>", "Server ID (uses linked project if not specified)")
+  .option("--auto", "Full autopilot: generate SEO, logo, mark free, publish")
+  .option("--free", "Mark server as free")
+  .option(
+    "--pricing <description>",
+    "AI generates pricing tiers from description",
+  )
+  .option("--generate-logo", "AI generates server logo")
+  .option("--generate-seo", "AI generates SEO metadata")
+  .option("--show", "Show current listing status")
+  .option("--unpublish", "Take down from marketplace")
+  .option("--dry-run", "Show what would happen without making changes")
+  .action(async (options) => {
+    try {
+      await publishCommand(options);
     } catch (error) {
       console.error(
         chalk.red(error instanceof Error ? error.message : String(error)),

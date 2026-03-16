@@ -43,6 +43,7 @@ export interface DeployOptions {
   noWait?: boolean;
   notes?: string;
   yes?: boolean;
+  skipWizard?: boolean;
 }
 
 function slugify(text: string): string {
@@ -557,7 +558,7 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
             }
 
             // Run post-deploy wizard (checks if monetization/SEO needed)
-            if (serverName) {
+            if (serverName && !options.skipWizard) {
               await runPostDeployWizard({
                 serverId,
                 serverName,

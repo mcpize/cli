@@ -2,6 +2,28 @@
 
 All notable changes to MCPize CLI.
 
+## [1.0.47] - 2026-03-16
+
+### Added
+- `mcpize publish` - Manage marketplace listing from the CLI
+  - `--auto` - Full autopilot: generate SEO, logo, mark free, publish
+  - `--auto --pricing "..."` - Autopilot with AI-generated paid pricing tiers
+  - `--generate-seo` - AI generates display name, category, tags, description
+  - `--free` - Mark server as free for everyone
+  - `--pricing <description>` - AI generates pricing tiers from natural language
+  - `--generate-logo` - AI generates server logo
+  - `--show` - Show current listing status (SEO, pricing)
+  - `--unpublish` - Take down from marketplace
+  - Interactive mode (no flags) walks through each step
+- `mcpize deploy --skip-wizard` - Skip post-deploy setup wizard
+- Shared `command-utils.ts` with `requireAuth()` and `resolveServerId()` for DRY
+- `generateLogo()` and `saveLogoUrl()` API functions
+- `logo_url` support in `update-server` edge function (with HTTPS validation)
+- `publish` route in `hosting-deploy` edge function
+
+### Changed
+- `setupMonetization()` and `setupSEO()` exported from `post-deploy-wizard.ts` for reuse
+
 ## [1.0.40] - 2025-02-11
 
 ### Added

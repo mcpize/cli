@@ -92,7 +92,7 @@ export async function runPostDeployWizard(
   );
 }
 
-async function setupMonetization(
+export async function setupMonetization(
   serverId: string,
   serverName: string,
 ): Promise<boolean> {
@@ -203,7 +203,7 @@ async function setupMonetization(
   return false;
 }
 
-async function setupSEO(
+export async function setupSEO(
   serverId: string,
   serverName: string,
   description?: string,
