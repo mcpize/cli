@@ -42,6 +42,7 @@ import { analyzeCommand } from "./commands/analyze.js";
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { tokenCommand } from "./commands/token.js";
 import { publishCommand } from "./commands/publish.js";
+import { runCommand } from "./commands/run.js";
 import { setTokenOverride } from "./lib/auth.js";
 
 const program = new Command();
@@ -442,6 +443,9 @@ program
       process.exit(1);
     }
   });
+
+// Run command (call MCP tools via REST API)
+program.addCommand(runCommand);
 
 // Parse arguments
 program.parse();

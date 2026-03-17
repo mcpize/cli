@@ -58,6 +58,7 @@ Browser login opens mcpize.com, you sign in with Google/GitHub/email, and the CL
 | `mcpize doctor` | Run pre-deploy diagnostics |
 | `mcpize whoami` | Show current authenticated user |
 | `mcpize publish` | Manage marketplace listing (SEO, pricing, logo) |
+| `mcpize run` | Run MCP server tools via REST API |
 | `mcpize dev` | Run local dev server with hot reload |
 
 ## Local Development
@@ -189,6 +190,49 @@ mcpize publish --unpublish           # Take down from marketplace
 # Interactive (walks through each step)
 mcpize publish
 ```
+
+## Run
+
+Call any MCP server's tools directly from the terminal:
+
+```bash
+# List available tools
+mcpize run github-mcp
+mcpize run github-mcp --list
+
+# Call a tool with inline JSON
+mcpize run github-mcp/search-repos '{"query": "mcp server", "limit": 5}'
+
+# Use --set for simple key=value arguments
+mcpize run weather/get-forecast -s city="San Francisco" -s units=metric
+
+# Pipe input from stdin
+echo '{"url": "https://example.com"}' | mcpize run scraper/extract-content
+
+# Read arguments from file
+mcpize run analytics/run-query --file query.json
+
+# Raw JSON output (pipeable to jq)
+mcpize run github-mcp/search-repos '{"query":"mcp"}' --json | jq '.data.items[].name'
+
+# Preview request without executing
+mcpize run github-mcp/search-repos '{"query":"test"}' --dry-run
+
+# Use API key instead of session (for CI/CD)
+mcpize run github-mcp/search-repos '{"query":"test"}' --api-key sk_live_xxx
+```
+
+### Run Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--list` | `-l` | List available tools for the server |
+| `--json` | `-j` | Raw JSON output (pipeable) |
+| `--api-key <key>` | `-k` | API key (overrides session) |
+| `--file <path>` | `-f` | Read arguments from JSON file (`-` for stdin) |
+| `--set <k=v>` | `-s` | Set argument key=value (repeatable) |
+| `--dry-run` | | Show request without executing |
+| `--verbose` | `-v` | Show request/response headers and timing |
 
 ## Options
 

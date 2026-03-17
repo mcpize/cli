@@ -2,6 +2,20 @@
 
 All notable changes to MCPize CLI.
 
+## [1.0.49] - 2026-03-17
+
+### Added
+- `mcpize run` - Call MCP server tools directly from the CLI via REST API
+  - `mcpize run <server>` - List available tools
+  - `mcpize run <server>/<tool> '{...}'` - Call a tool with inline JSON
+  - `-s, --set <key=value>` - Set arguments as key=value pairs (repeatable, dot notation for nested)
+  - `-f, --file <path>` - Read arguments from JSON file (`-` for stdin)
+  - `-j, --json` - Raw JSON output (pipeable to jq)
+  - `-k, --api-key <key>` - Use API key instead of session (for CI/CD)
+  - `--dry-run` - Preview request without executing
+  - `-v, --verbose` - Show request/response headers and timing
+  - Stdin pipe support: `echo '{}' | mcpize run server/tool`
+
 ## [1.0.47] - 2026-03-16
 
 ### Added
