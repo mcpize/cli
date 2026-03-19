@@ -186,6 +186,8 @@ mcpize publish --pricing "Free 100 req/day, Pro $10/mo"  # AI generates pricing 
 mcpize publish --generate-logo       # AI generates logo
 mcpize publish --show                # Show current listing status
 mcpize publish --unpublish           # Take down from marketplace
+mcpize publish --unlist              # Hide from marketplace (API still works)
+mcpize publish --list                # Show in marketplace again
 
 # Interactive (walks through each step)
 mcpize publish

@@ -51,12 +51,19 @@ export async function publishCommand(options: PublishOptions): Promise<void> {
     process.exit(1);
   }
 
+  if (options.list && options.unlist) {
+    console.error(chalk.red("Cannot use --list and --unlist together."));
+    process.exit(1);
+  }
+
   const mutationFlags = [
     options.auto,
     options.free,
     options.pricing,
     options.generateLogo,
     options.generateSeo,
+    options.list,
+    options.unlist,
   ].some(Boolean);
 
   if (options.show && options.unpublish) {
