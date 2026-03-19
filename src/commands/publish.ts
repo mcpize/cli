@@ -9,6 +9,7 @@ import {
   generatePlans,
   markServerAsFree,
   publishServer,
+  updateServerListed,
   generateLogo,
   saveLogoUrl,
   cleanServerName,
@@ -35,6 +36,8 @@ interface PublishOptions {
   generateSeo?: boolean;
   show?: boolean;
   unpublish?: boolean;
+  list?: boolean;
+  unlist?: boolean;
   dryRun?: boolean;
 }
 
@@ -125,6 +128,22 @@ export async function publishCommand(options: PublishOptions): Promise<void> {
     return;
   }
 
+  // --list / --unlist: toggle marketplace visibility
+  if (options.list || options.unlist) {
+    const listed = !!options.list;
+    const spinner = ora(listed ? "Listing in marketplace..." : "Unlisting from marketplace...").start();
+    try {
+      await updateServerListed(serverId, listed);
+      spinner.succeed(listed
+        ? "Server is now visible in the marketplace"
+        : "Server hidden from marketplace. Direct URL and API still work.");
+    } catch (error) {
+      spinner.fail("Failed to update listing");
+      throw error;
+    }
+    return;
+  }
+
   // --auto: smart autopilot — skips steps that are already configured
   if (options.auto) {
     const setupStatus = await getServerSetupStatus(serverId);
@@ -177,15 +196,24 @@ export async function publishCommand(options: PublishOptions): Promise<void> {
 async function showStatus(serverId: string): Promise<void> {
   const spinner = ora("Checking setup status...").start();
   try {
-    const status = await getServerSetupStatus(serverId);
+    const [setupStatus, serverInfo] = await Promise.all([
+      getServerSetupStatus(serverId),
+      getServerStatus(serverId),
+    ]);
     spinner.stop();
 
     console.log(chalk.bold("Setup Status:"));
     console.log(
-      `  SEO content:  ${status.hasSEO ? chalk.green("configured") : chalk.yellow("not configured")}`,
+      `  SEO content:  ${setupStatus.hasSEO ? chalk.green("configured") : chalk.yellow("not configured")}`,
     );
     console.log(
-      `  Pricing:      ${status.hasPlans ? chalk.green(`${status.planCount} plan(s)`) : chalk.yellow("not configured")}`,
+      `  Pricing:      ${setupStatus.hasPlans ? chalk.green(`${setupStatus.planCount} plan(s)`) : chalk.yellow("not configured")}`,
+    );
+    console.log(
+      `  Logo:         ${setupStatus.hasLogo ? chalk.green("configured") : chalk.yellow("not configured")}`,
+    );
+    console.log(
+      `  Listed:       ${serverInfo.server.listed ? chalk.green("visible in marketplace") : chalk.yellow("hidden (direct URL still works)")}`,
     );
   } catch (error) {
     spinner.fail("Failed to check status");

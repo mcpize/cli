@@ -432,6 +432,8 @@ program
   .option("--generate-seo", "AI generates SEO metadata")
   .option("--show", "Show current listing status")
   .option("--unpublish", "Take down from marketplace")
+  .option("--list", "Show server in marketplace")
+  .option("--unlist", "Hide from marketplace (API still works)")
   .option("--dry-run", "Show what would happen without making changes")
   .action(async (options) => {
     try {

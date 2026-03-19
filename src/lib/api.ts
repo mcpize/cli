@@ -415,6 +415,24 @@ export async function publishServer(
   });
 }
 
+export async function updateServerListed(
+  serverId: string,
+  listed: boolean,
+): Promise<{ success: boolean }> {
+  return edgeFunctionRequest<{ success: boolean }>(
+    "hosting-deploy",
+    "update-server",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        server_id: serverId,
+        listed,
+      }),
+    },
+  );
+}
+
 export async function getServerInfo(
   serverId: string,
 ): Promise<PublishResponse> {
@@ -593,6 +611,7 @@ export interface ServerStatusResponse {
     name: string;
     slug: string;
     status: string;
+    listed: boolean;
     hosting_url: string | null;
     health_status: string | null;
     last_health_check: string | null;
