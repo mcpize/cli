@@ -4,7 +4,8 @@ import Enquirer from "enquirer";
 import path from "node:path";
 
 const { prompt } = Enquirer;
-import { getToken, getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
+import { getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
+import { requireAuth } from "../lib/auth.js";
 import {
   uploadTarball,
   triggerDeploy,
@@ -108,12 +109,8 @@ async function fetchAndAnalyzeError(
 export async function deployCommand(options: DeployOptions): Promise<void> {
   const cwd = process.cwd();
 
-  // Check authentication
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
+  // Check authentication (auto-refreshes expired tokens)
+  await requireAuth();
 
   // Check for mcpize.yaml
   if (!hasManifest(cwd)) {

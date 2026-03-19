@@ -1,21 +1,13 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { getToken } from "../lib/config.js";
+import { requireAuth } from "../lib/auth.js";
 import {
   listCliTokens,
   createCliToken,
   deleteCliToken,
   type CliTokenInfo,
 } from "../lib/api.js";
-
-function requireAuth(): void {
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
-}
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return chalk.dim("Never");
@@ -56,7 +48,7 @@ tokenCommand
   .alias("ls")
   .description("List all CLI tokens")
   .action(async () => {
-    requireAuth();
+    await requireAuth();
     const spinner = ora("Fetching tokens...").start();
 
     try {
@@ -94,7 +86,7 @@ tokenCommand
   .description("Create a new CLI token")
   .option("--expires <days>", "Token expiration in days (default: never)")
   .action(async (name: string | undefined, options: { expires?: string }) => {
-    requireAuth();
+    await requireAuth();
 
     const tokenName = name || `CLI Token ${new Date().toISOString().split("T")[0]}`;
     const expiresInDays = options.expires ? parseInt(options.expires, 10) : undefined;
@@ -139,7 +131,7 @@ tokenCommand
   .description("Delete a CLI token by ID or prefix")
   .option("-f, --force", "Skip confirmation prompt")
   .action(async (idOrPrefix: string, options: { force?: boolean }) => {
-    requireAuth();
+    await requireAuth();
 
     // First, list tokens to find the one matching the ID or prefix
     const spinner = ora("Looking up token...").start();

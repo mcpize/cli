@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import ora from "ora";
-import { getToken, getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
+import { getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
+import { requireAuth } from "../lib/auth.js";
 import { loadProjectConfig } from "../lib/project.js";
 import {
   getServerStatus,
@@ -39,14 +40,6 @@ function getServerId(options: StatusOptions): string {
     chalk.dim("Use --server <id> or run from a linked project directory."),
   );
   process.exit(1);
-}
-
-function requireAuth(): void {
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
 }
 
 function formatStatus(status: string): string {
@@ -121,7 +114,7 @@ function formatDeployment(dep: DeploymentInfo, index: number): void {
 }
 
 export async function statusCommand(options: StatusOptions): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const cacheKey = CacheKeys.serverStatus(serverId);
 

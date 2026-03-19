@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import ora from "ora";
-import { getToken } from "../lib/config.js";
 import { loadProjectConfig } from "../lib/project.js";
+import { requireAuth } from "../lib/auth.js";
 import {
   listLogs,
   withRetry,
@@ -47,14 +47,6 @@ function getServerId(options: LogsOptions): string {
   process.exit(1);
 }
 
-function requireAuth(): void {
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
-}
-
 function formatSeverity(severity: string): string {
   switch (severity.toUpperCase()) {
     case "ERROR":
@@ -93,7 +85,7 @@ function printLog(log: LogEntry): void {
 }
 
 export async function logsCommand(options: LogsOptions): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const logType = options.type || "runtime";
   const cacheKey = CacheKeys.serverLogs(serverId, logType);

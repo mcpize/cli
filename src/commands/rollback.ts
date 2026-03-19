@@ -2,8 +2,8 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import Enquirer from "enquirer";
-import { getToken } from "../lib/config.js";
 import { loadProjectConfig } from "../lib/project.js";
+import { requireAuth } from "../lib/auth.js";
 import {
   getServerStatus,
   rollbackDeployment,
@@ -34,14 +34,6 @@ function getServerId(options: RollbackOptions): string {
     chalk.dim("Use --server <id> or run from a linked project directory."),
   );
   process.exit(1);
-}
-
-function requireAuth(): void {
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
 }
 
 function formatDeployment(d: DeploymentInfo, isCurrent: boolean): string {
@@ -81,7 +73,7 @@ export const rollbackCommand = new Command("rollback")
   .option("--reason <reason>", "Reason for rollback")
   .option("-y, --yes", "Skip confirmation prompt")
   .action(async (options: RollbackOptions) => {
-    requireAuth();
+    await requireAuth();
     const serverId = getServerId(options);
 
     console.log(chalk.bold("\nMCPize Rollback\n"));

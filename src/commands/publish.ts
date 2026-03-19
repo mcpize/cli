@@ -17,7 +17,8 @@ import {
 } from "../lib/api.js";
 import { getServerPageUrl, getServerManageUrl } from "../lib/config.js";
 import { loadManifest } from "../lib/project.js";
-import { requireAuth, resolveServerId } from "../lib/command-utils.js";
+import { resolveServerId } from "../lib/command-utils.js";
+import { requireAuth } from "../lib/auth.js";
 import {
   setupMonetization,
   setupSEO,
@@ -38,7 +39,7 @@ interface PublishOptions {
 }
 
 export async function publishCommand(options: PublishOptions): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = resolveServerId(options);
 
   // Validate flag conflicts

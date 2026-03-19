@@ -4,8 +4,8 @@ import Enquirer from "enquirer";
 
 const { prompt } = Enquirer;
 
-import { getToken } from "../lib/config.js";
 import { loadProjectConfig } from "../lib/project.js";
+import { requireAuth } from "../lib/auth.js";
 import { listServers, deleteServer, APIError } from "../lib/api.js";
 
 export interface DeleteOptions {
@@ -14,12 +14,8 @@ export interface DeleteOptions {
 }
 
 export async function deleteCommand(options: DeleteOptions): Promise<void> {
-  // Check authentication
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
+  // Check authentication (auto-refreshes expired tokens)
+  await requireAuth();
 
   let serverId = options.server;
   let serverName: string | undefined;

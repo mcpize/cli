@@ -2,8 +2,8 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "node:fs";
 import readline from "node:readline";
-import { getToken } from "../lib/config.js";
 import { loadProjectConfig } from "../lib/project.js";
+import { requireAuth } from "../lib/auth.js";
 import {
   listSecrets,
   setSecret,
@@ -34,16 +34,8 @@ function getServerId(options: SecretsOptions): string {
   process.exit(1);
 }
 
-function requireAuth(): void {
-  const token = getToken();
-  if (!token) {
-    console.error(chalk.red("Not authenticated. Run: mcpize login"));
-    process.exit(1);
-  }
-}
-
 export async function secretsListCommand(options: SecretsOptions): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const environment = options.environment || "production";
 
@@ -88,7 +80,7 @@ export async function secretsSetCommand(
   value: string | undefined,
   options: SecretsSetOptions,
 ): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const environment = options.environment || "production";
 
@@ -188,7 +180,7 @@ export async function secretsDeleteCommand(
   name: string,
   options: SecretsOptions,
 ): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const environment = options.environment || "production";
 
@@ -213,7 +205,7 @@ export interface SecretsExportOptions extends SecretsOptions {
 export async function secretsExportCommand(
   options: SecretsExportOptions,
 ): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const environment = options.environment || "production";
   const format = options.format || "env";
@@ -308,7 +300,7 @@ export async function secretsImportCommand(
   filePath: string,
   options: SecretsImportOptions,
 ): Promise<void> {
-  requireAuth();
+  await requireAuth();
   const serverId = getServerId(options);
   const environment = options.environment || "production";
 
