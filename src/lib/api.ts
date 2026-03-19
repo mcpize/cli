@@ -644,13 +644,15 @@ export interface GeneratePlansResponse {
 export async function generatePlans(
   serverName: string,
   userInput: string,
-): Promise<GeneratePlansResponse> {
-  return edgeFunctionRequest<GeneratePlansResponse>("generate-plans", "", {
+  serverId?: string,
+): Promise<GeneratePlansResponse & { saved?: boolean }> {
+  return edgeFunctionRequest<GeneratePlansResponse & { saved?: boolean }>("generate-plans", "", {
     method: "POST",
     body: JSON.stringify({
       serverName,
       userInput,
       isPrivate: false,
+      ...(serverId && { server_id: serverId }),
     }),
   });
 }

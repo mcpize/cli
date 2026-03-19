@@ -7,7 +7,6 @@ import {
   generateSEO,
   saveSEO,
   generatePlans,
-  savePlans,
   markServerAsFree,
   publishServer,
   generateLogo,
@@ -245,8 +244,7 @@ async function runAutoPublish(
   if (pricingDescription) {
     const pricingSpinner = ora("Generating pricing plans...").start();
     try {
-      const result = await generatePlans(serverName, pricingDescription);
-      await savePlans(serverId, result.plans);
+      const result = await generatePlans(serverName, pricingDescription, serverId);
       pricingSpinner.succeed(
         `Saved ${result.plans.length} plan(s): ${result.plans.map((p) => p.name).join(", ")}`,
       );
@@ -361,14 +359,10 @@ async function runGeneratePlans(
 ): Promise<void> {
   const spinner = ora("Generating plans with AI...").start();
   try {
-    const result = await generatePlans(serverName, pricingDescription);
-    spinner.succeed(`Generated ${result.plans.length} plan(s)`);
+    const result = await generatePlans(serverName, pricingDescription, serverId);
+    spinner.succeed(`Generated and saved ${result.plans.length} plan(s)`);
 
     displayPlans(result.plans);
-
-    const saveSpinner = ora("Saving plans...").start();
-    await savePlans(serverId, result.plans);
-    saveSpinner.succeed("Plans saved!");
   } catch (error) {
     spinner.fail("Failed to generate plans");
     throw error;
