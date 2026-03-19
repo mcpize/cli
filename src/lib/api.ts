@@ -775,6 +775,7 @@ export async function markServerAsFree(
 export interface ServerSetupStatus {
   hasPlans: boolean;
   hasSEO: boolean;
+  hasLogo: boolean;
   planCount: number;
 }
 

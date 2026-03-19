@@ -125,14 +125,16 @@ export async function publishCommand(options: PublishOptions): Promise<void> {
     return;
   }
 
-  // --auto: full autopilot
+  // --auto: smart autopilot — skips steps that are already configured
   if (options.auto) {
+    const setupStatus = await getServerSetupStatus(serverId);
     await runAutoPublish(
       serverId,
       serverName,
       serverSlug,
       description,
       options.pricing,
+      setupStatus,
     );
     return;
   }
@@ -197,12 +199,13 @@ async function runAutoPublish(
   serverSlug: string,
   description: string,
   pricingDescription?: string,
+  setupStatus?: { hasSEO: boolean; hasPlans: boolean; hasLogo: boolean; planCount: number },
 ): Promise<void> {
-  console.log(chalk.bold("Running full autopilot...\n"));
+  console.log(chalk.bold("Running smart autopilot...\n"));
 
   const failures: string[] = [];
 
-  // Step 0: Clean server name
+  // Step 0: Clean server name (always — it's cheap)
   const nameSpinner = ora("Cleaning server name...").start();
   try {
     const cleaned = await cleanServerName(serverName);
@@ -217,32 +220,37 @@ async function runAutoPublish(
     failures.push("name cleaning");
   }
 
-  // Step 1: Generate SEO
-  const seoSpinner = ora("Generating SEO content...").start();
-  try {
-    const seo = await generateSEO(serverName, description);
-    await saveSEO(serverId, {
-      display_name: seo.display_name,
-      category: seo.category,
-      short_description: seo.short_description,
-      long_description: seo.long_description,
-      seo_title: seo.seo_title,
-      seo_description: seo.seo_description,
-      tags: seo.tags,
-    });
-    seoSpinner.succeed(
-      `SEO saved: ${seo.display_name} [${seo.category}] (${seo.tags.length} tags)`,
-    );
-  } catch (error) {
-    seoSpinner.fail("Failed to generate SEO");
-    console.error(
-      chalk.red(error instanceof Error ? error.message : String(error)),
-    );
-    failures.push("SEO generation");
+  // Step 1: Generate SEO (skip if already configured)
+  if (setupStatus?.hasSEO) {
+    console.log(chalk.green("  ✓ SEO content: already configured"));
+  } else {
+    const seoSpinner = ora("Generating SEO content...").start();
+    try {
+      const seo = await generateSEO(serverName, description);
+      await saveSEO(serverId, {
+        display_name: seo.display_name,
+        category: seo.category,
+        short_description: seo.short_description,
+        long_description: seo.long_description,
+        seo_title: seo.seo_title,
+        seo_description: seo.seo_description,
+        tags: seo.tags,
+      });
+      seoSpinner.succeed(
+        `SEO saved: ${seo.display_name} [${seo.category}] (${seo.tags.length} tags)`,
+      );
+    } catch (error) {
+      seoSpinner.fail("Failed to generate SEO");
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      failures.push("SEO generation");
+    }
   }
 
-  // Step 2: Pricing — generate plans from description or mark as free
+  // Step 2: Pricing (skip if already has plans and no --pricing override)
   if (pricingDescription) {
+    // Explicit --pricing flag always regenerates
     const pricingSpinner = ora("Generating pricing plans...").start();
     try {
       const result = await generatePlans(serverName, pricingDescription, serverId);
@@ -256,6 +264,8 @@ async function runAutoPublish(
       );
       failures.push("pricing setup");
     }
+  } else if (setupStatus?.hasPlans) {
+    console.log(chalk.green(`  ✓ Pricing: ${setupStatus.planCount} plan(s) configured`));
   } else {
     const freeSpinner = ora("Marking server as free...").start();
     try {
@@ -270,27 +280,31 @@ async function runAutoPublish(
     }
   }
 
-  // Step 3: Generate logo
-  const logoSpinner = ora("Generating logo with AI...").start();
-  try {
-    const logoResult = await generateLogo(
-      serverId,
-      serverName,
-      description,
-      serverSlug,
-    );
-    if (logoResult.logoUrl) {
-      await saveLogoUrl(serverId, logoResult.logoUrl);
-      logoSpinner.succeed("Logo generated and saved");
-    } else {
-      logoSpinner.warn("No logo generated");
+  // Step 3: Generate logo (skip if already has one)
+  if (setupStatus?.hasLogo) {
+    console.log(chalk.green("  ✓ Logo: already configured"));
+  } else {
+    const logoSpinner = ora("Generating logo with AI...").start();
+    try {
+      const logoResult = await generateLogo(
+        serverId,
+        serverName,
+        description,
+        serverSlug,
+      );
+      if (logoResult.logoUrl) {
+        await saveLogoUrl(serverId, logoResult.logoUrl);
+        logoSpinner.succeed("Logo generated and saved");
+      } else {
+        logoSpinner.warn("No logo generated");
+      }
+    } catch (error) {
+      logoSpinner.fail("Failed to generate logo");
+      console.error(
+        chalk.red(error instanceof Error ? error.message : String(error)),
+      );
+      failures.push("logo generation");
     }
-  } catch (error) {
-    logoSpinner.fail("Failed to generate logo");
-    console.error(
-      chalk.red(error instanceof Error ? error.message : String(error)),
-    );
-    failures.push("logo generation");
   }
 
   // Abort publish if critical steps failed
