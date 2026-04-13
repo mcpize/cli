@@ -449,6 +449,33 @@ program
 // Run command (call MCP tools via REST API)
 program.addCommand(runCommand);
 
+// Search command (public Discovery API, no auth needed)
+program
+  .command("search <query>")
+  .description("Search the MCPize marketplace for MCP servers")
+  .option("-l, --limit <number>", "Max results (1-20)", "5")
+  .option("-t, --tag <tag>", "Filter by tag")
+  .option(
+    "-p, --pricing <type>",
+    "Filter by pricing (free, freemium, paid)",
+  )
+  .option(
+    "-s, --sort <sort>",
+    "Sort by (relevance, rating, newest)",
+    "relevance",
+  )
+  .option("--json", "Output as JSON")
+  .action(async (query: string, options) => {
+    const { search } = await import("./commands/search.js");
+    await search(query, {
+      limit: parseInt(options.limit),
+      tag: options.tag,
+      pricing: options.pricing,
+      sort: options.sort,
+      json: options.json,
+    });
+  });
+
 // Parse arguments
 program.parse();
 
