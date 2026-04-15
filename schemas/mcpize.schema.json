@@ -184,6 +184,16 @@
             }
           },
           "additionalProperties": false
+        },
+        "oauth_provider": {
+          "type": "string",
+          "description": "Managed OAuth provider. MCPize handles the OAuth flow and token refresh automatically. Users see a 'Connect with {provider}' button instead of manual token entry.",
+          "enum": ["github", "google", "slack", "figma", "facebook", "shopify", "hubspot", "linear", "notion", "atlassian", "discord", "dropbox", "spotify"]
+        },
+        "oauth_scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "OAuth scopes to request. If omitted, MCPize uses sensible defaults based on the credential name."
         }
       },
       "additionalProperties": false

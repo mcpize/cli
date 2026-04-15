@@ -86,6 +86,9 @@ function printSecretsAndCredentials(
       const required = cred.required !== false ? chalk.red("required") : chalk.dim("optional");
       const desc = cred.description ? chalk.dim(` - ${cred.description}`) : "";
       console.log(`  • ${chalk.cyan(cred.name)} (${required})${desc}`);
+      if (cred.oauth_provider) {
+        console.log(chalk.green(`    OAuth: Connect with ${cred.oauth_provider}`) + (cred.oauth_scopes?.length ? chalk.dim(` [${cred.oauth_scopes.join(", ")}]`) : ""));
+      }
       if (cred.docs_url) {
         console.log(chalk.dim(`    Docs: ${cred.docs_url}`));
       }

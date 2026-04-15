@@ -1074,6 +1074,10 @@ export interface CredentialDefinition {
     header?: string;
     arg?: string;
   };
+  /** Managed OAuth provider slug (e.g., "github", "google", "slack", "figma") */
+  oauth_provider?: string;
+  /** OAuth scopes to request (e.g., ["repo", "read:user"]) */
+  oauth_scopes?: string[];
 }
 
 /**
