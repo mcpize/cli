@@ -22,6 +22,7 @@ const pkg = JSON.parse(
 const version = pkg.version;
 import { loginCommand } from "./commands/login.js";
 import { logoutCommand } from "./commands/logout.js";
+import { authStatusCommand, authConnectCommand, authDisconnectCommand } from "./commands/auth.js";
 import { deployCommand } from "./commands/deploy.js";
 import { linkCommand } from "./commands/link.js";
 import { initCommand } from "./commands/init.js";
@@ -129,6 +130,46 @@ program
       console.error(
         chalk.red(error instanceof Error ? error.message : String(error)),
       );
+      process.exit(1);
+    }
+  });
+
+const authCmd = program
+  .command("auth")
+  .description("Manage OAuth connections");
+
+authCmd
+  .command("status")
+  .description("Show OAuth connection status")
+  .action(async () => {
+    try {
+      await authStatusCommand();
+    } catch (error) {
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+      process.exit(1);
+    }
+  });
+
+authCmd
+  .command("connect <provider>")
+  .description("Connect an OAuth provider (opens browser)")
+  .action(async (provider) => {
+    try {
+      await authConnectCommand(provider);
+    } catch (error) {
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+      process.exit(1);
+    }
+  });
+
+authCmd
+  .command("disconnect <provider>")
+  .description("Disconnect an OAuth provider")
+  .action(async (provider) => {
+    try {
+      await authDisconnectCommand(provider);
+    } catch (error) {
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
       process.exit(1);
     }
   });
