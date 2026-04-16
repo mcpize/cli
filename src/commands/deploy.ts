@@ -7,6 +7,7 @@ const { prompt } = Enquirer;
 import { getServerPageUrl, getServerGatewayUrl } from "../lib/config.js";
 import { requireAuth } from "../lib/auth.js";
 import {
+  APIError,
   uploadTarball,
   triggerDeploy,
   getDeploymentStatus,
@@ -464,6 +465,8 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
       const deploymentId = deployResult.deployment_id;
       let lastStatus = "";
       const startTime = Date.now();
+      const MAX_POLL_MS = 10 * 60 * 1000; // 10 minutes
+      let consecutive404 = 0;
 
       const formatElapsed = () => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -475,8 +478,21 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
       while (true) {
         await new Promise((resolve) => setTimeout(resolve, 5000)); // Poll every 5s
 
+        // Timeout guard
+        if (Date.now() - startTime > MAX_POLL_MS) {
+          waitSpinner.fail(`Deployment timed out after ${formatElapsed()}`);
+          console.error(
+            chalk.red("\nThe build is still running but polling has stopped."),
+          );
+          console.log(
+            chalk.dim("Check status manually: mcpize logs"),
+          );
+          process.exit(1);
+        }
+
         try {
           const status = await getDeploymentStatus(deploymentId);
+          consecutive404 = 0; // Reset on successful response
           const elapsed = formatElapsed();
 
           if (status.status !== lastStatus) {
@@ -589,7 +605,26 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
             process.exit(1);
           }
         } catch (error) {
-          // Continue polling on network errors
+          // Stop polling if deployment not found (404) — webhook likely failed
+          const is404 =
+            (error instanceof APIError && error.statusCode === 404) ||
+            (error instanceof Error && error.message.includes("Deployment not found"));
+
+          if (is404) {
+            consecutive404++;
+            if (consecutive404 >= 3) {
+              waitSpinner.fail("Deployment not found");
+              console.error(
+                chalk.red(
+                  "\nThe deployment record could not be found. The build webhook may have failed.",
+                ),
+              );
+              console.log(chalk.dim("Check status manually: mcpize logs"));
+              process.exit(1);
+            }
+          }
+
+          // Continue polling on transient network errors
           console.error(
             chalk.dim(
               `\nPolling error: ${error instanceof Error ? error.message : String(error)}`,
