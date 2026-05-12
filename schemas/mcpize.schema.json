@@ -105,6 +105,61 @@
       "enum": ["shared", "per_user"],
       "description": "Credential ownership model",
       "default": "shared"
+    },
+    "pricing": {
+      "type": "object",
+      "description": "x402 per-tool USDC pricing manifest (paid MCP servers). When present, tool calls are billed via the x402 protocol on Base.",
+      "required": ["protocol", "network", "recipient", "asset", "tools"],
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "const": "x402",
+          "description": "Payment protocol. Only \"x402\" is currently supported."
+        },
+        "network": {
+          "type": "string",
+          "enum": ["base", "base-sepolia"],
+          "description": "EVM network for settlement. Use \"base\" for production, \"base-sepolia\" for testing."
+        },
+        "recipient": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$",
+          "description": "Your USDC payout wallet address (20-byte hex). MUST be wrapped in quotes in YAML (e.g., \"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359\") -- otherwise YAML coerces the 0x-prefixed value to a hex number. MUST use EIP-55 mixed-case checksum casing. The zero address is rejected."
+        },
+        "asset": {
+          "type": "string",
+          "const": "usdc",
+          "description": "Settlement asset. Only \"usdc\" is currently supported."
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "description": "Per-tool pricing list. Tool names must be unique and match the names returned by your MCP server's tools/list.",
+          "items": {
+            "type": "object",
+            "required": ["name", "price"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+                "description": "Tool identifier. Must match the tool name exposed by your server (letters, digits, underscore; cannot start with a digit)."
+              },
+              "price": {
+                "type": "string",
+                "description": "Price per call in USDC, as a decimal string. Range: 0.01 to 100, up to 6 decimal places (e.g., \"0.05\", \"1.50\", \"100\")."
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Optional short description shown to subscribers in the marketplace."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$defs": {

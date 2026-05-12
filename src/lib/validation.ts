@@ -4,8 +4,10 @@ import { execSync } from "node:child_process";
 import { z } from "zod";
 import chalk from "chalk";
 import ora from "ora";
+import { LineCounter, parseDocument } from "yaml";
 import type { McpizeManifest } from "./project.js";
 import { getServerGatewayUrl } from "./config.js";
+import { X402PricingSchema } from "./x402-pricing.js";
 
 // ============================================
 // Schema Validation
@@ -59,6 +61,7 @@ const ManifestSchema = z.object({
   secrets: z.array(SecretSchema).optional(),
   credentials: z.array(CredentialSchema).optional(),
   credentials_mode: z.enum(["shared", "per_user"]).optional(),
+  pricing: X402PricingSchema.optional(),
   // configSchema: reserved for future use, not yet supported at runtime
 });
 
@@ -68,7 +71,21 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-export function validateManifest(manifest: unknown): ValidationResult {
+/**
+ * Validate a parsed manifest against {@link ManifestSchema}.
+ *
+ * @param manifest  The parsed YAML object.
+ * @param yamlText  Optional raw mcpize.yaml source. When supplied, error
+ *                  messages are augmented with `(line:col)` hints for the
+ *                  offending node, sourced via the `yaml` package's
+ *                  {@link LineCounter}. Best-effort only — paths that can't
+ *                  be resolved to a node (e.g. array-level refines) fall
+ *                  back to the field-path-only form.
+ */
+export function validateManifest(
+  manifest: unknown,
+  yamlText?: string,
+): ValidationResult {
   const result: ValidationResult = {
     valid: true,
     errors: [],
@@ -79,9 +96,56 @@ export function validateManifest(manifest: unknown): ValidationResult {
 
   if (!parsed.success) {
     result.valid = false;
+
+    // Optional: precompute a yaml Document + LineCounter so we can map Zod
+    // issue paths to (line, col). If yamlText is malformed or absent we just
+    // skip the hint.
+    let docLookup: ((path: (string | number)[]) => { line: number; col: number } | null) | null = null;
+    if (yamlText) {
+      try {
+        const lineCounter = new LineCounter();
+        const doc = parseDocument(yamlText, { lineCounter });
+        docLookup = (path) => {
+          if (path.length === 0) return null;
+          const node = doc.getIn(path, true) as unknown;
+          if (
+            node &&
+            typeof node === "object" &&
+            "range" in node &&
+            Array.isArray((node as { range?: unknown }).range)
+          ) {
+            const range = (node as { range: [number, number, number] }).range;
+            const [start] = range;
+            const pos = lineCounter.linePos(start);
+            return { line: pos.line, col: pos.col };
+          }
+          return null;
+        };
+      } catch {
+        // YAML wouldn't have parsed — line/col hints unavailable.
+        docLookup = null;
+      }
+    }
+
     for (const issue of parsed.error.issues) {
       const path = issue.path.join(".");
-      result.errors.push(`${path}: ${issue.message}`);
+      let suffix = "";
+      if (docLookup) {
+        // Walk up the path until we find a node we can locate. Array-level
+        // refines (e.g., "duplicate tool names") report path=["pricing","tools"]
+        // and Zod object-level refines may report longer paths whose terminal
+        // segment doesn't exist as a node — walking up gives the user a useful
+        // anchor either way.
+        const pathSegments = issue.path as (string | number)[];
+        for (let i = pathSegments.length; i > 0; i--) {
+          const pos = docLookup(pathSegments.slice(0, i));
+          if (pos) {
+            suffix = ` (line ${pos.line}, col ${pos.col})`;
+            break;
+          }
+        }
+      }
+      result.errors.push(`${path}: ${issue.message}${suffix}`);
     }
   }
 
@@ -681,7 +745,18 @@ export async function runPreDeployChecks(
 
   // 1. Validate manifest schema
   const schemaSpinner = ora("Validating mcpize.yaml...").start();
-  const schemaResult = validateManifest(manifest);
+  // Re-read raw YAML to surface (line:col) hints on any schema errors.
+  // Best-effort: validation still works without it.
+  let yamlText: string | undefined;
+  try {
+    const manifestPath = join(cwd, "mcpize.yaml");
+    if (existsSync(manifestPath)) {
+      yamlText = readFileSync(manifestPath, "utf-8");
+    }
+  } catch {
+    yamlText = undefined;
+  }
+  const schemaResult = validateManifest(manifest, yamlText);
 
   if (!schemaResult.valid) {
     schemaSpinner.fail("Invalid mcpize.yaml");
