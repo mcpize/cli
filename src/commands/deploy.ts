@@ -16,6 +16,7 @@ import {
   createServer,
   discoverCapabilities,
   listLogs,
+  listSecrets,
   type ServerInfo,
 } from "../lib/api.js";
 import {
@@ -124,10 +125,28 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
   console.log(chalk.bold("\nMCPize Deploy\n"));
   console.log(chalk.dim(`Runtime: ${manifest?.runtime || "unknown"}`));
 
+  // Loaded before the pre-deploy checks so the secrets check knows what is
+  // already configured — without it every env var reads as missing.
+  let projectConfig = loadProjectConfig(cwd);
+
   // Run pre-deploy checks
   if (manifest) {
     console.log();
-    const preChecks = await runPreDeployChecks(cwd, manifest);
+
+    // Fetch configured secrets for an already-linked server. Best-effort: a
+    // network hiccup must not block the deploy, it only costs us the warning's
+    // accuracy. An unlinked project has no secrets yet, so [] is correct there.
+    let configuredSecrets: string[] = [];
+    if (projectConfig?.serverId) {
+      try {
+        const secrets = await listSecrets(projectConfig.serverId);
+        configuredSecrets = secrets.map((s) => s.name);
+      } catch {
+        // Leave empty — check degrades to "potentially missing", never blocks
+      }
+    }
+
+    const preChecks = await runPreDeployChecks(cwd, manifest, configuredSecrets);
 
     // Show warnings
     for (const warning of preChecks.warnings) {
@@ -152,8 +171,7 @@ export async function deployCommand(options: DeployOptions): Promise<void> {
   // Get git info first (needed for auto-create)
   const gitInfo = await getGitInfo(cwd);
 
-  // Get or create server
-  let projectConfig = loadProjectConfig(cwd);
+  // Get or create server (projectConfig already loaded above)
   let serverId = "";
   let serverName: string | undefined;
   let serverSlug: string | undefined;
