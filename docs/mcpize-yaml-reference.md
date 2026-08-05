@@ -190,6 +190,59 @@ Controls how credentials are injected into your server at runtime.
 | `shared` | Publisher provides all secrets at deploy time. Subscribers don't need their own keys. Default. |
 | *(omitted)* | Auto-detected: if any credential has `required: true` → `per_user`, otherwise `shared`. |
 
+### Choosing a mode
+
+Both modes are legitimate. They answer different questions.
+
+**`shared`** means your keys serve everyone. Think of a coffee shop: you bought the machine and the beans, everyone drinks your coffee. This is the right model when you are reselling access to an API you pay for, and it is why most paid servers on MCPize use it.
+
+**`per_user`** means every subscriber brings their own keys. Think of a coworking space: people show up with their own laptops. This is the right model when the credentials are personal, tied to your account, or attached to hardware you own.
+
+Pick `per_user` if any of these is true:
+
+| Signal | Why it matters |
+|--------|----------------|
+| The server is **free and publicly listed** | Anyone with an MCPize account can call it. In `shared` mode they call it with your keys. |
+| The credential is billed per use | Someone else's traffic lands on your invoice. |
+| The credential grants account access | A `GOOGLE_REFRESH_TOKEN` or a GitHub PAT lets callers act as you, within its scopes. |
+| The credential reaches physical hardware | Callers reach your device, not a rate-limited API. |
+
+The default deserves a warning. **If your `mcpize.yaml` declares no `credentials:` block, the mode is `shared`**, and adding secrets later with `mcpize secrets set` does not change that. Nothing re-evaluates the mode, so a server can end up serving your personal keys to the public without anyone having chosen that.
+
+Callers never see your secret **values**. Credentials travel from the gateway to your server and are never returned to the client. What callers get is the ability to use them.
+
+### Switching from shared to per_user
+
+Four steps, and the last two are the ones people miss.
+
+**1. Declare the credentials in `mcpize.yaml`.** Use the same names your code already reads from the environment. The `name` field becomes the env var directly, so no `mapping` is needed.
+
+```yaml
+credentials:
+  - name: WORKER
+    required: true
+    description: Your Cloudflare Worker URL
+  - name: TOKEN
+    required: true
+    description: Your device token
+
+credentials_mode: per_user
+```
+
+**2. Redeploy.** The manifest is re-read on every deploy, so this is what actually flips the mode.
+
+```bash
+mcpize deploy
+```
+
+**3. Add your own values as a user.** Per-user means everyone, including you. Open your server page in the Dashboard and enter them there. From this point they are stored against your account, not the server.
+
+**4. Delete the old secrets, then redeploy again.** In the Dashboard, go to **Secrets**, delete the entries you just replaced, and run `mcpize deploy` once more.
+
+Step 4 is not optional. Runtime secrets are written into the container's environment at deploy time regardless of `credentials_mode`, so the values from your earlier deploy stay live until a deploy without them replaces the revision. Skipping this step leaves you believing the server is locked down when it is not.
+
+Once this is done, every caller is asked for their own credentials before any tool will run. No credentials, no call.
+
 ---
 
 ## How Credentials Reach Your Server at Runtime
