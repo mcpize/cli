@@ -72,6 +72,9 @@ mcpize dev
 # With custom entry point
 mcpize dev src/server.ts
 
+# Custom port (default 3000, passed to the server as PORT)
+mcpize dev --port 8080
+
 # Expose via public tunnel (for testing with Claude/clients)
 mcpize dev --tunnel
 
@@ -82,6 +85,14 @@ mcpize dev --playground
 mcpize dev --tunnel --provider ngrok
 ```
 
+What `mcpize dev` runs per runtime:
+
+| Runtime | Command |
+|---------|---------|
+| TypeScript | `npm run dev` (or `tsx watch <entry>`) |
+| Python | `uv run fastmcp run -m <module> --reload` for FastMCP projects whose `startCommand` is `.venv/bin/python -m <module>`; otherwise the `startCommand` from `mcpize.yaml` |
+| PHP | `php -S 0.0.0.0:$PORT -t public public/index.php` (the same `public/` front controller FrankenPHP serves in Docker) |
+
 The `--playground` flag automatically creates a tunnel and opens the [MCPize Playground](https://mcpize.com/playground) where you can test your server's tools interactively.
 
 ## Templates
@@ -89,8 +100,11 @@ The `--playground` flag automatically creates a tunnel and opens the [MCPize Pla
 Create a new project from a template:
 
 ```bash
-# TypeScript (default)
+# Interactive: prompts for the template
 mcpize init my-server
+
+# TypeScript (typescript/default)
+mcpize init my-server --template typescript
 
 # Generate from OpenAPI spec
 mcpize init my-api --template openapi --from-url https://api.example.com/openapi.json
@@ -98,6 +112,19 @@ mcpize init my-api --template openapi --from-url https://api.example.com/openapi
 # Python
 mcpize init my-server --template python
 ```
+
+Without `--template`, `mcpize init` asks which template to use. A bare language name selects its `default` template (`python` → `python/default`), and `openapi` selects `typescript/openapi`.
+
+| Template | Description |
+|----------|-------------|
+| `typescript/default` | TypeScript MCP server with `@modelcontextprotocol/sdk` (recommended) |
+| `typescript/billing-events` | TypeScript MCP server with event billing |
+| `typescript/openapi` | Generate an MCP server from an OpenAPI spec (`--from-url` / `--from-file`) |
+| `python/default` | Python MCP server with FastMCP |
+| `python/openapi` | Generate a Python FastMCP server from an OpenAPI spec (`--from-url` / `--from-file`, `--api-base-url`) |
+| `php/default` | PHP MCP server with the official `mcp/sdk` |
+
+Other options: `--dir <path>`, `--no-install`, `--no-git`. Set `MCPIZE_TEMPLATES_DIR` to a local checkout of [mcpize/templates](https://github.com/mcpize/templates) to scaffold from it instead of GitHub.
 
 ## Analyze
 

@@ -41,8 +41,9 @@ function resolveProjectName(targetDir: string, providedName: string): string {
 export interface InitOptions {
   template?: string;
   dir?: string;
-  noInstall?: boolean;
-  noGit?: boolean;
+  // Commander maps --no-install / --no-git to install: false / git: false
+  install?: boolean;
+  git?: boolean;
   // All other options passed through to template post-init
   [key: string]: unknown;
 }
@@ -68,7 +69,7 @@ function optionsToEnv(options: InitOptions): Record<string, string> {
 
   for (const [key, value] of Object.entries(options)) {
     // Skip internal options
-    if (["template", "dir", "noInstall", "noGit"].includes(key)) {
+    if (["template", "dir", "install", "git"].includes(key)) {
       continue;
     }
 
@@ -81,7 +82,8 @@ function optionsToEnv(options: InitOptions): Record<string, string> {
           .toUpperCase()
           .replace(/^_/, "");
 
-      env[envKey] = String(value);
+      // post-init runs with cwd=targetDir, so relative paths must be resolved against the user's cwd
+      env[envKey] = key === "fromFile" ? path.resolve(String(value)) : String(value);
     }
   }
 
@@ -264,7 +266,7 @@ export async function initCommand(
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Check for common errors
-    if (errorMessage.includes("could not find")) {
+    if (errorMessage.includes("not found")) {
       console.error(
         chalk.red(`Template "${template}" not found in repository.`),
       );
@@ -300,7 +302,7 @@ export async function initCommand(
   }
 
   // Initialize git
-  if (!options.noGit) {
+  if (options.git !== false) {
     try {
       execSync("git init", { cwd: targetDir, stdio: "pipe" });
       console.log(chalk.dim("Initialized git repository"));
@@ -322,7 +324,7 @@ export async function initCommand(
   }
 
   // Install dependencies
-  if (!options.noInstall) {
+  if (options.install !== false) {
     const installSpinner = ora("Installing dependencies...").start();
 
     try {
@@ -384,7 +386,7 @@ export async function initCommand(
   const isPython = fs.existsSync(path.join(targetDir, "pyproject.toml"));
   const isPHP = fs.existsSync(path.join(targetDir, "composer.json"));
 
-  if (options.noInstall) {
+  if (options.install === false) {
     if (isPython) {
       console.log(chalk.dim("  uv sync"));
     } else if (isPHP) {

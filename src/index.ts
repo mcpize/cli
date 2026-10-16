@@ -68,7 +68,7 @@ program
   .description("Create a new MCP server project")
   .option(
     "-t, --template <template>",
-    "Template to use (e.g., typescript, openapi)",
+    "Template to use (e.g., typescript, typescript/billing-events, openapi, python, python/openapi, php)",
   )
   .option("--dir <path>", "Target directory")
   .option("--no-install", "Skip dependency installation")
@@ -76,6 +76,7 @@ program
   // Template-specific options (passed to post-init script via env)
   .option("--from-url <url>", "OpenAPI spec URL to generate from")
   .option("--from-file <path>", "Local OpenAPI spec file to generate from")
+  .option("--api-base-url <url>", "API base URL override (python/openapi)")
   .allowUnknownOption(true) // Allow any options for future templates
   .action(async (name, options) => {
     try {

@@ -2,7 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createServer } from "node:net";
 import { parse as parseYaml } from "yaml";
 import {
@@ -72,11 +72,24 @@ function detectRuntime(
 }
 
 /**
+ * Whether a Python project depends on FastMCP (pyproject.toml or requirements.txt)
+ */
+function usesFastMCP(cwd: string): boolean {
+  return ["pyproject.toml", "requirements.txt"].some((file) => {
+    const filePath = join(cwd, file);
+    return (
+      existsSync(filePath) && /\bfastmcp\b/i.test(readFileSync(filePath, "utf-8"))
+    );
+  });
+}
+
+/**
  * Get dev command based on runtime
  */
 function getDevCommand(
   cwd: string,
   runtime: string,
+  port: number,
   customEntry?: string,
 ): { cmd: string; args: string[] } {
   // Check package.json for custom dev script
@@ -102,29 +115,51 @@ function getDevCommand(
   }
 
   if (runtime === "python") {
-    // Custom entry for Python
+    // uv projects (pyproject.toml) run inside the project venv via `uv run`
+    const uv = existsSync(join(cwd, "pyproject.toml")) ? ["uv", "run"] : [];
+    const withUv = (args: string[]) =>
+      uv.length > 0
+        ? { cmd: uv[0], args: [...uv.slice(1), ...args] }
+        : { cmd: args[0], args: args.slice(1) };
+
     if (customEntry) {
-      // Convert file path to module notation for uvicorn if it looks like a module
-      if (customEntry.endsWith(":app") || customEntry.includes(":")) {
-        return {
-          cmd: "uvicorn",
-          args: [customEntry, "--reload", "--host", "0.0.0.0"],
-        };
+      // A file inside a package (src/my_pkg/server.py) may use relative imports,
+      // so run it as a module (my_pkg.server), like the templates' startCommand
+      const pkgFile = customEntry.match(/^(?:\.\/)?(?:src\/)?(.+)\.py$/);
+      if (pkgFile && existsSync(join(cwd, dirname(customEntry), "__init__.py"))) {
+        customEntry = pkgFile[1].replace(/\//g, ".");
       }
-      // Direct python execution with watchdog
-      return {
-        cmd: "python",
-        args: [
-          "-m",
-          "watchdog.watchmedo",
-          "auto-restart",
-          "--patterns=*.py",
-          "--recursive",
-          "--",
-          "python",
+
+      // FastMCP server file (server.py or server.py:mcp): `fastmcp run` serves it
+      // over Streamable HTTP on /mcp and restarts on file changes
+      if (/\.py(:|$)/.test(customEntry)) {
+        return withUv([
+          "fastmcp",
+          "run",
           customEntry,
-        ],
-      };
+          "--transport",
+          "http",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          String(port),
+          "--reload",
+        ]);
+      }
+      // ASGI app in module notation (app.main:app)
+      if (customEntry.includes(":")) {
+        return withUv([
+          "uvicorn",
+          customEntry,
+          "--reload",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          String(port),
+        ]);
+      }
+      // Module (my_server.server): it starts its own server, reading PORT
+      return withUv(["fastmcp", "run", "-m", customEntry, "--reload"]);
     }
 
     // Read start command from mcpize.yaml (most reliable)
@@ -135,12 +170,19 @@ function getDevCommand(
           readFileSync(manifestPath, "utf-8"),
         ) as McpizeManifest;
         if (manifest.startCommand?.command) {
-          // Convert .venv/bin/python to uv run python for local dev
-          const startCmd = manifest.startCommand.command.replace(
-            /^\.venv\/bin\/python\b/,
-            "uv run python",
-          );
-          const parts = startCmd.split(/\s+/);
+          const parts = manifest.startCommand.command.trim().split(/\s+/);
+          // `.venv/bin/python -m <module>` (MCPize templates): run the module
+          // under `fastmcp run -m --reload` for hot reload when it's a FastMCP project
+          const moduleMatch = manifest.startCommand.command
+            .trim()
+            .match(/^\.venv\/bin\/python -m (\S+)$/);
+          if (moduleMatch && uv.length > 0 && usesFastMCP(cwd)) {
+            return withUv(["fastmcp", "run", "-m", moduleMatch[1], "--reload"]);
+          }
+          // Otherwise convert .venv/bin/python to uv run python for local dev
+          if (parts[0] === ".venv/bin/python" && uv.length > 0) {
+            return withUv(["python", ...parts.slice(1)]);
+          }
           return { cmd: parts[0], args: parts.slice(1) };
         }
       } catch {
@@ -155,21 +197,40 @@ function getDevCommand(
       if (reqs.includes("uvicorn") || reqs.includes("fastmcp")) {
         return {
           cmd: "uvicorn",
-          args: ["src.main:app", "--reload", "--host", "0.0.0.0"],
+          args: [
+            "src.main:app",
+            "--reload",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            String(port),
+          ],
         };
       }
     }
     // Last resort fallback
-    return {
-      cmd: "python",
-      args: ["-m", "src.main"],
-    };
+    return withUv(["python", "-m", "src.main"]);
   }
 
   if (runtime === "php") {
-    // Custom entry for PHP (document root)
-    const docRoot = customEntry || "public";
-    return { cmd: "php", args: ["-S", "0.0.0.0:8080", "-t", docRoot] };
+    // Mirror the Docker setup (Caddyfile: `root public` + `php_server`): serve the
+    // public/ docroot and route every request through its front controller, which
+    // requires server.php. A directory entry overrides the docroot, a .php entry
+    // overrides the router (e.g. server.php, which handles HTTP under php -S too).
+    let docRoot = "public";
+    let router: string | undefined;
+    if (customEntry?.endsWith(".php")) {
+      router = customEntry;
+    } else if (customEntry) {
+      docRoot = customEntry;
+    }
+    if (!router && existsSync(join(cwd, docRoot, "index.php"))) {
+      router = join(docRoot, "index.php");
+    }
+    return {
+      cmd: "php",
+      args: ["-S", `0.0.0.0:${port}`, "-t", docRoot, ...(router ? [router] : [])],
+    };
   }
 
   return { cmd: "echo", args: ["Unknown runtime"] };
@@ -420,14 +481,14 @@ async function waitForServer(port: number, maxAttempts = 30): Promise<boolean> {
         signal: controller.signal,
       });
 
+      // Streamable HTTP answers with JSON or an SSE stream (e.g. FastMCP)
+      // carrying the JSON-RPC response - accept either. The timeout also
+      // covers reading the body, in case a stream stays open.
+      const body = response.ok ? await response.text() : "";
       clearTimeout(timeout);
 
-      if (response.ok) {
-        const data = await response.json() as { result?: unknown; jsonrpc?: string };
-        // Check if we got a valid MCP response
-        if (data.result || data.jsonrpc === "2.0") {
-          return true;
-        }
+      if (body.includes('"jsonrpc"')) {
+        return true;
       }
     } catch {
       // Server not ready yet, continue polling
@@ -541,7 +602,7 @@ export const devCommand = new Command("dev")
     }
 
     // 5. Get dev command (with custom entry if provided)
-    const { cmd, args } = getDevCommand(cwd, runtime, entry);
+    const { cmd, args } = getDevCommand(cwd, runtime, port, entry);
     if (entry) {
       console.log(`Entry: ${chalk.cyan(entry)}`);
     }
@@ -553,6 +614,13 @@ export const devCommand = new Command("dev")
       PORT: String(port),
       NODE_ENV: "development",
     };
+
+    // PHP template: mcp/sdk's DNS rebinding protection only accepts localhost
+    // Host/Origin headers, so tunnel (and Playground) requests would get 403.
+    // The template reads MCP_ALLOWED_HOSTS; "*" turns the check off.
+    if (options.tunnel && runtime === "php" && !env.MCP_ALLOWED_HOSTS) {
+      env.MCP_ALLOWED_HOSTS = "*";
+    }
 
     // 7. Print command info
     console.log(chalk.gray("\n─────────────────────────────────────────\n"));
@@ -594,8 +662,9 @@ export const devCommand = new Command("dev")
           // Negative PID kills the entire process group
           process.kill(-child.pid, "SIGTERM");
         } catch {
-          // Fallback to killing just the child
-          child.kill("SIGKILL");
+          // Not a group leader: SIGTERM the child so wrappers (npm, uv run,
+          // fastmcp --reload) can forward it; SIGKILL would orphan their children
+          child.kill("SIGTERM");
         }
       }
 
